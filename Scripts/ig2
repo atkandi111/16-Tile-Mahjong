@@ -1,0 +1,314 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using JetBrains.Annotations;
+using UnityEngine;
+using Random = System.Random;
+using System.Runtime.CompilerServices;
+using System.Numerics;
+using Quaternion = UnityEngine.Quaternion;
+using Vector3 = UnityEngine.Vector3;
+public static class DestinationHandler
+{
+    public static void SetDestination(this GameObject gameObject, Vector3 position)
+    {
+        TileComponent tileComponent = gameObject.GetComponent<TileComponent>();
+        if (tileComponent == null)
+        {
+            tileComponent = gameObject.AddComponent<TileComponent>();
+            tileComponent.secondsTravelled = 0f;
+        }
+        tileComponent.targetDestination = position;
+    }
+    public static void SetRotation(this GameObject gameObject, Quaternion rotation)
+    {
+        TileComponent tileComponent = gameObject.GetComponent<TileComponent>();
+        if (tileComponent == null)
+        {
+            tileComponent = gameObject.AddComponent<TileComponent>();
+            tileComponent.secondsTravelled = 0f;
+        }
+        tileComponent.targetRotation = rotation;
+    }
+    public static void AddSeconds(this GameObject gameObject, float seconds)
+    {
+        gameObject.GetComponent<TileComponent>().secondsTravelled += seconds; 
+    }
+    public static void ClearSeconds(this GameObject gameObject)
+    {
+        gameObject.GetComponent<TileComponent>().secondsTravelled = 0f;
+    }
+    public static Vector3 GetDestination(this GameObject gameObject)
+    {
+        return gameObject.GetComponent<TileComponent>().targetDestination;
+    }
+    public static Quaternion GetRotation(this GameObject gameObject)
+    {
+        return gameObject.GetComponent<TileComponent>().targetRotation;
+    }
+    public static float GetSecondsTravelled(this GameObject gameObject)
+    {
+        return gameObject.GetComponent<TileComponent>().secondsTravelled;
+    }
+    private class TileComponent : MonoBehaviour
+    {
+        public Queue<Vector3> targetDestination;
+        public Queue<Quaternion> targetRotation;
+        public float secondsTravelled;
+    }
+}
+public class InstantiateGame : MonoBehaviour
+{ 
+    private Vector3 position, sidestep, startPos, finalPos, tileSize, tileOffset;
+    private Quaternion rotation, startRot, finalRot;
+    private Nullable<int> leadIndex = null, backIndex = null, funcIndex = 0;
+    private float stopWatch, travelTime, duration;
+    private Action[] pendingFunc;
+    private Dictionary<int, List<Vector3>> quadrant;
+    public static List<GameObject> TileSet;
+    public static GameObject[][] TileWalls, TileBlocks, TileHands, TileArray;
+    void Awake()
+    {   
+        TileSet = new List<GameObject>();
+        Dictionary<string, IEnumerable<string>> constructor = new Dictionary<string, IEnumerable<string>>
+        {
+            { "b", new string[] { "1", "2", "3", "4", "5", "6", "7", "8", "9" } },
+            { "s", new string[] { "1", "2", "3", "4", "5", "6", "7", "8", "9" } },
+            { "c", new string[] { "1", "2", "3", "4", "5", "6", "7", "8", "9" } },
+            { "d", new string[] { "N", "S", "W", "E" } },
+            { "t", new string[] { "G", "R", "W" } },
+            { "f", new string[] { "R", "B" } }
+        };
+        
+        // Create TileSet
+        GameObject temp;
+        foreach (string suit in constructor.Keys)
+        {
+            foreach (string unit in constructor[suit])
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    temp = Instantiate(Resources.Load("Tile")) as GameObject;
+                    temp.name = suit + unit + "-" + (i + 1);
+                    temp.transform.localScale = new Vector3(1600, 1600, 2000);
+                    temp.transform.position = new Vector3(0, -0.1f, 0);
+                    TileSet.Add(temp);
+                }
+            }
+        }
+
+        // Shuffle TileSet by Fisher-Yates algorithm
+        Random random = new Random();
+        for (int i = TileSet.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(0, i + 1);
+            temp = TileSet[i];
+            TileSet[i] = TileSet[j];
+            TileSet[j] = temp;
+        }
+
+        // Assign TileWalls and TileBlocks
+        TileWalls  = new GameObject[4][];
+        TileBlocks = new GameObject[4][];
+        TileHands  = new GameObject[4][];
+
+        for (int i = 0; i < 4; i++)
+        {
+            TileWalls[i] = new GameObject[20];
+            for (int j = 0; j < 20; j++)
+            {
+                TileWalls[i][j] = TileSet[(i * 20) + j];
+            }
+
+            TileBlocks[i] = new GameObject[16];
+            for (int j = 0; j < 16; j++)
+            {
+                TileBlocks[i][j] = TileSet[(i * 16) + j + 80];
+            }
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            TileHands[i] = new GameObject[16];
+            for (int j = 0; j < 16; j++)
+            {
+                // [j] = 0.1.2.3.4.5.6.7.8.9............
+                // [a] = 0.0.0.0.1.1.1.1.2.2.2.2.3.3.3.3
+                // [b] = 0.1.8.9.0.1.8.9.0.1.8.9.0.1.8.9
+
+                int quadIndex = (j / 4);
+                int tileIndex = (2 * i) + (j % 2) + ((j % 4) / 2) * 8;
+                TileHands[i][j] = TileBlocks[quadIndex][tileIndex];
+            }
+        }
+
+        Bounds bounds = TileWalls[0][0].GetComponent<MeshRenderer>().bounds;
+        quadrant = new Dictionary<int, List<Vector3>>
+        {
+        //    ID                     SIDE                   FIRST TILE             LAST TILE
+            { 0, new List<Vector3> { new Vector3(0, 0, -1), new Vector3(-1, 0, 0), new Vector3(+1, 0, 0) } }, // SOUTH
+            { 1, new List<Vector3> { new Vector3(+1, 0, 0), new Vector3(0, 0, -1), new Vector3(0, 0, +1) } }, // WEST
+            { 2, new List<Vector3> { new Vector3(0, 0, +1), new Vector3(+1, 0, 0), new Vector3(-1, 0, 0) } }, // NORTH
+            { 3, new List<Vector3> { new Vector3(-1, 0, 0), new Vector3(0, 0, +1), new Vector3(0, 0, -1) } }  // EAST
+        };
+
+        pendingFunc = new Action[] { 
+            () => { duration = 0.02f; TileArray = TileWalls; AssignWalls(20, xRotation: 90, perimSize: 2.24f); },
+            () => { duration = 0.05f; TileArray = TileBlocks; AssignWalls(8, xRotation: 90, perimSize: 1.25f); },
+            () => { duration = 0.1f; TileArray = TileHands; AssignWalls(16, xRotation: 0, perimSize: 3.25f); },
+            () => { enabled = false; }
+        };
+
+        // leadIndex = 0, TileSet
+        // leadIndex = 0, for i in TileHand
+    }
+    void AssignWalls(int numTiles, int xRotation, float perimSize) //GameObject[][] TileArray, 
+    {
+        Bounds bounds = TileArray[0][0].GetComponent<MeshRenderer>().bounds;
+        tileSize = Quaternion.Euler((xRotation - 90), 0, 0) * bounds.size;
+        tileOffset = tileSize * 0.5f;
+
+        Vector3 wallVector, startVector, lift;
+        foreach (int wallIndex in quadrant.Keys)
+        {
+            wallVector  = quadrant[wallIndex][0] * (perimSize + tileOffset.z);
+            startVector = quadrant[wallIndex][1] * ((numTiles / 2) * tileSize.x - tileOffset.x);
+            if (TileArray == TileWalls)
+            {
+                startVector -= quadrant[wallIndex][1] * (tileOffset.z);
+            }
+
+            position = wallVector + startVector;
+            sidestep = quadrant[wallIndex][2] * tileSize.x;
+            rotation = Quaternion.Euler(xRotation, (2 - wallIndex) * 90, 0);
+
+            for (int i = 0; i < TileArray[wallIndex].Length; i++)
+            {
+                lift = new Vector3(0, tileSize.y, 0) * (0.5f + (i / numTiles));
+                // Debug.Log(String.Format("{0} {1}", position + lift + (sidestep * i), i));
+                TileArray[wallIndex][i].SetDestination(position + lift + (sidestep * (i % numTiles)));
+                TileArray[wallIndex][i].SetRotation(rotation);
+            }
+        }
+
+        stopWatch = Time.time;
+    }
+    static (int, int) LinearIndexConverter(int linearIndex, int arrayLen)
+    {
+        int rowIndex = linearIndex / arrayLen;
+        int colIndex = linearIndex % arrayLen;
+
+        return (rowIndex, colIndex);
+    }
+    void Update()
+    {
+        // instantiate duration outside
+        if (leadIndex == null)
+        {
+            pendingFunc[funcIndex.Value]();
+            backIndex = 0;
+            leadIndex = 0;
+        }
+
+        leadIndex = (int)((Time.time - stopWatch) / duration);
+        if (TileArray == TileHands)
+        {
+            leadIndex = leadIndex * 4 + 3;
+        }
+        leadIndex = Math.Min((4 * TileArray[0].Length) - 1, leadIndex.Value);
+
+
+        
+        int row, col;
+        (row, col) = LinearIndexConverter(leadIndex.Value, TileArray[0].Length);
+
+        GameObject temp = TileArray[row][col];
+        if (temp.transform.position == new Vector3(0, -0.1f, 0))
+        {
+            temp.transform.position = temp.GetDestination() + new Vector3(0, 0.5f, 0);
+            temp.transform.rotation = temp.GetRotation();
+        }
+
+        for (int index = backIndex.Value; index <= leadIndex.Value; index++)
+        {        
+            (row, col) = LinearIndexConverter(index, TileArray[0].Length);
+            temp = TileArray[row][col];
+
+            startPos = temp.transform.position;
+            startRot = temp.transform.rotation;
+            finalPos = temp.GetDestination();
+            finalRot = temp.GetRotation();
+            
+            temp.AddSeconds(Time.deltaTime);
+            float travelTime = temp.GetSecondsTravelled();
+
+            temp.transform.position = Vector3.Lerp(startPos, finalPos, travelTime / 2);
+            temp.transform.rotation = Quaternion.Lerp(startRot, finalRot, travelTime / 2);
+
+            if (startPos == finalPos)
+            {
+                temp.ClearSeconds();
+                backIndex++;
+            }
+        }
+
+        if (backIndex.Value == (4 * TileArray[0].Length))
+        {
+            backIndex = null;
+            leadIndex = null;
+            funcIndex++;
+        }
+    }
+    /*void Update()
+    {
+        if (leadIndex == -1)
+        {
+            stopWatch = Time.time;
+            pendingFunc[funcIndex]();
+        }
+
+        float duration = 0.02f;
+        leadIndex = (int)((Time.time - stopWatch) / duration);
+
+        // so that TileBlocks takes twice longer
+        // anything beyond index 80 has to be even
+        if (leadIndex > 80)
+        {
+            leadIndex = 80 + (leadIndex - 80) / 2;
+        }
+        leadIndex = Math.Min(143, leadIndex);
+
+        if (TileSet[leadIndex].transform.position == new Vector3(0, -0.1f, 0))
+        {
+            TileSet[leadIndex].transform.position = TileSet[leadIndex].GetDestination() + new Vector3(0, 0.5f, 0);
+            TileSet[leadIndex].transform.rotation = TileSet[leadIndex].GetRotation();
+        }
+
+        for (int index = backIndex; index <= leadIndex; index++)
+        {
+            startPos = TileSet[index].transform.position;
+            startRot = TileSet[index].transform.rotation;
+            finalPos = TileSet[index].GetDestination();
+            finalRot = TileSet[index].GetRotation();
+            
+            TileSet[index].AddSeconds(Time.deltaTime);
+            float travelTime = TileSet[index].GetSecondsTravelled();
+
+            TileSet[index].transform.position = Vector3.Lerp(startPos, finalPos, travelTime / 2);
+            TileSet[index].transform.rotation = Quaternion.Lerp(startRot, finalRot, travelTime / 2);
+
+            if (startPos == finalPos)
+            {
+                TileSet[index].ClearSeconds();
+                backIndex++;
+            }
+        }
+
+        if (backIndex == 144)
+        {
+            backIndex =  0;
+            leadIndex = -1;
+            funcIndex++;
+        }
+    }*/
+}
