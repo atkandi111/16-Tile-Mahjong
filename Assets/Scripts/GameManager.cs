@@ -336,7 +336,7 @@ public class GameManager : MonoBehaviour
     }*/
 
     IEnumerator SetupTiles()
-    {
+    { 
         for (int i = 0; i < TileSet.Count; i++)
         {
             yield return new WaitForSeconds(0.02f);
