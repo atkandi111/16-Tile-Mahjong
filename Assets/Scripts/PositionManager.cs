@@ -1,4 +1,4 @@
-using System;
+/*using System;
 using System.Collections;
 using System.Collections.Generic;
 using Random = System.Random;
@@ -53,10 +53,6 @@ public class PositionManager : MonoBehaviour
         startVector *= (tileSize.x * (numTiles / 2) - tileOffset.x - startOffset); 
         stepVector  *= (tileSize.x);
 
-        int quadrant = PlayerID * 90;
-        wallVe
-        wallVector = Quaternion.Euler(0, quadrant, 0) * new Vector3(0, 0, -1) * (perimSize + tileOffset.z)
-
         for (int i = 0; i < TileArray.Count; i++)
         {
             liftVector = ((i / numTiles) + 0.5f) * new Vector3(0, liftPosition, 0);
@@ -65,45 +61,6 @@ public class PositionManager : MonoBehaviour
 
             TileArray[i].GetComponent<TileManager>().AddDestination(position, rotation, 3f);
         }
-    }
-
-    public static void AssignPosition(List<GameObject> TileArray, int PlayerID, string tileState)
-    {
-        tileSize = GameManager.tileSize;
-        tileOffset = GameManager.tileOffset;
-
-        switch (tileState)
-        {
-            case "Opened":  liftPosition = tileSize.y; liftRotation = 270; break;
-            case "Closed":  liftPosition = tileSize.y; liftRotation = 90; break;
-            case "Stand":   liftPosition = tileSize.z; liftRotation = 180; break;
-            case "UserPOV": liftPosition = 0.154f; liftRotation = 220; break;
-        }
-
-        wallVector = new Vector3(0, 0, -1) * (perimSize + tileOffset.z);
-        tileVector = new Vector3(-1, 0, 0) * (tileSize.x * (numTiles / 2) - tileOffset.x);
-
-        int quadrant = PlayerID * -90;
-        wallVector = Quaternion.Euler(0, quadrant, 0) * wallVector;
-        tileVector = Quaternion.Euler(0, quadrant, 0) * tileVector;
-
-        for (int i = 0; i < TileArray.Count; i++)
-
-        for (int i = 0; i < TileArray.Count; i++)
-        {
-            liftVector = ((i / numTiles) + 0.5f) * new Vector3(0, liftPosition, 0);
-            position = wallVector + liftVector + startVector + stepVector * (i % numTiles);
-            rotation = Quaternion.Euler(liftRotation, -PlayerID * 90, TileArray[i].transform.eulerAngles.z * 180);
-
-            TileArray[i].GetComponent<TileManager>().AddDestination(position, rotation, 3f);
-        }
-    }
-
-    public static void DistributeTiles()
-    {
-        // given: tileArray, positionClass (open, kang, toss, grab) + playerID
-        // do: addDestination each array elem
-        // array must be distributed in a row and centered
     }
 
     void Update()
@@ -149,3 +106,4 @@ public class PositionManager : MonoBehaviour
         }
     }
 }
+*/

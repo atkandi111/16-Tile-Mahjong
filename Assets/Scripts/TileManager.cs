@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile, SelectTile
+/*public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile, SelectTile
 {
     [System.Serializable]
     public class DestinationInfo
@@ -95,6 +95,57 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
             transform.rotation = finalRot;
             secondsTravelled = 0;
             ClearDestination();
+            enabled = false;
+        }
+    }
+}*/
+
+public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile, SelectTile
+{
+    private Vector3 currentPos, targetPos;
+    private Quaternion currentRot, targetRot;
+    private float lerpDuration, lerpFactor, secondsTravelled;
+
+    public (Vector3, Quaternion) GetDestination()
+    {
+        return (targetPos, targetRot);
+    }
+    public void SetDestination(Vector3 position, Quaternion rotation, float LerpDuration = 3f)
+    {
+        currentPos = transform.position;
+        currentRot = transform.rotation;
+        targetPos = position;
+        targetRot = rotation;
+
+        lerpDuration = LerpDuration;
+        secondsTravelled = 0f;
+        enabled = true;
+    }
+    void Awake()
+    {
+        enabled = false;
+    }
+    void Update()
+    {
+        /*
+        startPos = transform.position;
+        startRot = transform.rotation;
+        finalPos = currentDestination.destination.Item1;
+        finalRot = currentDestination.destination.Item2;
+        */
+
+        currentPos = transform.position;
+        currentRot = transform.rotation;
+        secondsTravelled += Time.deltaTime;
+        lerpFactor = secondsTravelled / lerpDuration;
+
+        transform.position = Vector3.Lerp(currentPos, targetPos, lerpFactor);
+        transform.rotation = Quaternion.Lerp(currentRot, targetRot * Quaternion.Euler(0, -1, 0), lerpFactor);
+
+        if (transform.position == targetPos)// && transform.rotation == finalRot)
+        {
+            transform.position = targetPos;
+            transform.rotation = targetRot;
             enabled = false;
         }
     }

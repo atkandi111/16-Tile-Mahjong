@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class DragTile : MonoBehaviour
 {
-    GameObject swapTile;
+    GameObject swapTile; 
     private bool clicked = false, activated = false;
     private float rightBound, leftBound;
     private float longPressTimer = 0f, longPressDuration = 0.25f;
@@ -79,8 +79,8 @@ public class DragTile : MonoBehaviour
                 GameManager.Players[0].Hand[index] = swapTile;
                 GameManager.Players[0].Hand[index + 1] = gameObject;
 
-                swapTile.GetComponent<TileManager>().ChangeDestination(basePosition, swapTile.transform.rotation, 0.05f);
-                swapTile.GetComponent<TileManager>().enabled = true;
+                swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
+                // swapTile.GetComponent<TileManager>().enabled = true;
 
                 Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
                 swapTile.GetComponent<DragTile>().basePosition = basePosition;
@@ -95,8 +95,8 @@ public class DragTile : MonoBehaviour
                 GameManager.Players[0].Hand[index] = swapTile;
                 GameManager.Players[0].Hand[index - 1] = gameObject;
 
-                swapTile.GetComponent<TileManager>().ChangeDestination(basePosition, swapTile.transform.rotation, 0.05f);
-                swapTile.GetComponent<TileManager>().enabled = true;
+                swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
+                // swapTile.GetComponent<TileManager>().enabled = true;
 
                 Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
                 swapTile.GetComponent<DragTile>().basePosition = basePosition;
@@ -121,8 +121,8 @@ public class DragTile : MonoBehaviour
             else
             {
                 // return to basePosition
-                GetComponent<TileManager>().AddDestination(basePosition, baseRotation, 1);
-                PositionManager.ScheduleEvent(0.05f, 1, new List<GameObject> { gameObject });
+                GetComponent<TileManager>().SetDestination(basePosition, baseRotation, 1);
+                // PositionManager.ScheduleEvent(0.05f, 1, new List<GameObject> { gameObject });
             }
         }
 
