@@ -1,0 +1,242 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"}]}}
+
+#!csharp
+
+static List<string> names = new List<string>()
+{
+    "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
+    "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+    "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
+    "dN", "dS", "dW", "dE", "tG", "tR", "tW", "fR", "fB"
+};
+static List<string> namedHand = names.OrderBy(x => Guid.NewGuid()).Take(16).ToList();
+namedHand = new List<string>() 
+{
+    "c2", "c7", "s3", "s3", "c1", "dE", "s7", "tW", "s4", "c4", "s3", "s6", "dS", "b3", "s9", "tW"
+};
+
+// static List<string> namedHand = new List<string> {"s6", "c6", "b2", "s7", "b1", "fR", "dW", "b6", "dN", "s4", "dS", "c9", "b6", "tW", "s8", "b2"};
+
+SortTiles(namedHand);
+
+void Logger(List<string> list)
+{
+    Console.WriteLine(string.Join(" ", list));
+}
+
+void Logger(List<int> list)
+{
+    Console.WriteLine(string.Join(" ", list));
+}
+
+
+
+void SortTiles(List<string> Hand)
+{
+    Logger(Hand);
+
+    /* Sign tiles with (list_index / list_length) to preserve arrangement */
+    List<string> tileNames = Hand
+        .Select((tile, index) => $"{tile}.{100 * index / Hand.Count}")
+        .ToList();
+
+    /* Generate sorted list of hand's tile names */
+    List<string> sortNames = tileNames
+        .OrderBy(name => name, new TileComparer())
+        .ToList();
+
+
+    /* Generate list of target index (index after sorting) for each tile */
+    List<int> tileRanks = tileNames
+        .Select(name => sortNames.IndexOf(name))
+        .ToList();
+
+    Logger(tileRanks);
+
+    /* Decompose targetIndices into increasing subsequences */
+    List<int> mainSubsequence = new List<int>();
+
+    List<List<int>> increasingSubsequences = tileRanks.Aggregate(new List<List<int>>(), (seqn, num) =>
+    {
+        if (seqn.Count == 0 || num <= seqn.Last().Last()) 
+        {
+            seqn.Add(new List<int>());
+        }
+        seqn.Last().Add(num);
+
+        if (mainSubsequence.Count < seqn.Last().Count)
+        {
+            mainSubsequence = seqn.Last();
+        }
+
+        return seqn;
+    });
+
+    increasingSubsequences.Remove(mainSubsequence);
+    Logger(mainSubsequence);
+    Console.WriteLine("------");
+    foreach (var seqn in increasingSubsequences)
+    {
+        Logger(seqn);
+    }
+    Console.WriteLine("------");
+
+    foreach (List<int> seqn in increasingSubsequences)
+    {
+        while (seqn.Any()) // may not be necessary
+        {
+            Console.WriteLine("------");
+            List<int> seqnSample = seqn.GetRange(0, Math.Min(seqn.Count, 3));
+            seqn.RemoveRange(0, Math.Min(seqn.Count, 3));
+
+            foreach (int rank in seqnSample)
+            {
+                /*
+                BinarySearch returns index of number in list
+                If no match, returns bitwise complement of negative index of next larger number
+                If no match, returns bitwise complement of list length making it largest number
+
+                In mainSubsequence, get the smallest larger number than the targetIndex
+                Insert targetIndex before that number
+
+                e.g.
+                list: [3, 5, 9] , num: 4
+                list: [3, 4, 5, 9]
+                */
+
+                int startIndex = tileRanks.IndexOf(rank);
+                string currentTile = Hand[startIndex];
+                Hand.RemoveAt(startIndex);
+                tileRanks.RemoveAt(startIndex);
+
+                //int preceedingRank = mainSubsequence[mainSubsequence.Count - 1];
+                // int finalIndex = targetIndices.IndexOf(preceedingRank) + 1;
+                int preceedingRank, finalIndex = 0;
+
+                for (int i = 0; i <= mainSubsequence.Count; i++)
+                {
+                    if (i == mainSubsequence.Count)
+                    {
+                        preceedingRank = mainSubsequence[i - 1];
+                        mainSubsequence.Insert(i, rank);
+
+                        finalIndex = tileRanks.IndexOf(preceedingRank) + 1;
+                        break;
+                    }
+                    if (mainSubsequence[i] > rank)
+                    {
+                        preceedingRank = mainSubsequence[i];
+                        mainSubsequence.Insert(i, rank);
+
+                        finalIndex = tileRanks.IndexOf(preceedingRank);
+                        break;
+                    } 
+                }
+
+                Hand.Insert(finalIndex, currentTile);
+                tileRanks.Insert(finalIndex, rank);
+
+                Console.WriteLine("Inserted " + currentTile + " at " + finalIndex);
+                Logger(Hand);
+                Console.WriteLine();
+            }
+        }
+    }
+}
+
+public class TileComparer : IComparer<string>
+{    
+    string suitOrder = null;
+    private string SuitOrder()
+    {
+        /* Create suit hierarchy */
+        Dictionary<char, int> suitHierarchy = new Dictionary<char, int>
+        {
+            {'b', 0}, {'c', 0}, {'s', 0},   // Leftmost
+            {'t', 1}, {'d', 1},             // Middle
+            {'f', 2}                        // Rightmost
+        };
+
+        /* Calculate index density (the average index of all tiles of a suit) */
+        var indexDensity = namedHand
+            .Select((tile, index) => (suit: tile[0], index))
+            .GroupBy(pair => pair.suit)
+            .ToDictionary(
+                grp => grp.Key, 
+                grp => grp.Average(pair => pair.index)
+            );
+
+        /* Sort suit based on (Hierarchy) and (Index Density) */
+        var sortedLetters = indexDensity
+            .OrderBy(kvp => suitHierarchy[kvp.Key])
+            .ThenBy(kvp => kvp.Value)
+            .Select(kvp => kvp.Key);
+
+        /* Concatenate sorted letters into a single string */
+        return string.Concat(sortedLetters);
+    }
+    public int Compare(string x, string y)
+    {
+        /* Extract suit and unit from tile name */
+        if (suitOrder == null)
+        {
+            suitOrder = SuitOrder();
+        }
+
+        int suitX = suitOrder.IndexOf(x[0]);
+        int suitY = suitOrder.IndexOf(y[0]);
+        string unitX = x.Substring(1);
+        string unitY = y.Substring(1);
+        // float unitX = float.Parse(x.Substring(1));
+        // float unitY = float.Parse(y.Substring(1));
+
+        /* Compare suits first */
+        int suitComparison = suitX.CompareTo(suitY);
+        if (suitComparison != 0)
+        {
+            return suitComparison;
+        }
+
+        /* If suits are the same, compare units (and signature) */
+        return unitX.CompareTo(unitY);
+    }
+}
+
+#!csharp
+
+int[] nums = {-5, -3, -2, -1, 0, 1, 5, 9};
+
+int length = nums.Length - 1;
+
+nums[0] *= nums[0];
+for (int i = length; i > 0; i--)
+{
+    nums[i] *= nums[i];
+    if (nums[i] < nums[0])
+    {
+        int temp = nums[0];
+        nums[0] = nums[i];
+        nums[i] = temp;
+    }
+    Console.WriteLine(string.Join(" ", nums));
+}
+
+#!csharp
+
+public static class Kata
+{
+    public static string ReverseWords(string str)
+    {
+        string[] words = str.Split(' ');
+        foreach (string word in words)
+        {
+            char[] charArray = word.ToCharArray();
+            Array.Reverse(charArray);
+            str = str.Replace(word, new string(charArray));
+        }
+        return str;
+    }
+}
+Console.Write(Kata.ReverseWords("hello  hi"));

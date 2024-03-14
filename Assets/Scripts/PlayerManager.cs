@@ -1,130 +1,173 @@
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using Random = System.Random;
 using UnityEngine;
 // using GameManager.FacePreset
 
-//[CreateAssetMenu(fileName = "PlayerData", menuName = "ScriptableObjects/PlayerData", order = 1)]
-public class Player : ScriptableObject
+// Playerprefs Built-in class
+
+public abstract class Player
 {
+    public List<Vector3> BasePositions = new List<Vector3>();
     public List<GameObject> Hand = new List<GameObject>();
     public List<GameObject> Open = new List<GameObject>();
 
-    //[Header("Player Information")]
     public string playerName;
-    public GameManager.FacePreset state;
-    private Quaternion quadrant;
-    private int playerID, coins = 0, wins = 0;
+    public int playerID, coins = 0, wins = 0;
 
-    public void Initialize(int PlayerID, string PlayerName)
+    protected Quaternion quadrant;
+    protected Vector3 viewpoint;
+    protected GameManager.FacePreset state;
+
+    public Player(int playerID, string playerName)
     {
-        this.playerID = PlayerID;
-        this.playerName = PlayerName;
-        this.quadrant = Quaternion.Euler(0, -90 * PlayerID, 0);
-        
-        if (playerID == 0)
-        {
-            this.state = GameManager.FacePreset.Player;
-        }
-        else
-        {
-            this.state = GameManager.FacePreset.Stand;
-        }
-
-        // take 16 tiles as starting hand
-        // PositionWalls (1) so that they arrive to hand face down
-        // PositionWalls (2) so that face down hand is standed
+        this.playerID = playerID;
+        this.playerName = playerName;
     }
-    private Vector3 position;
-    private Quaternion rotation;
 
-    public void GrabTile(GameObject[] tiles)
+    public virtual void GrabTile(GameObject tile)
+    {
+        GrabTile(new List<GameObject> { tile });
+    }
+
+    public virtual void GrabTile(List<GameObject> tiles)
     {
         Hand.AddRange(tiles);
+        foreach(GameObject tile in tiles)
+        {
+            tile.GetComponent<TileManager>().SetOrientation(new Random().Next(2) * 180);
+        }
 
+        BasePositions = new List<Vector3>();
         IEnumerator<Vector3> row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
         foreach (GameObject tile in Hand)
         {
             row.MoveNext();
-            position = this.quadrant * row.Current;
-            rotation = this.quadrant * Quaternion.Euler((int) this.state, 0, 0);
-            
-            tile.GetComponent<TileManager>().SetDestination(position, rotation, 1.5f);
-        }
+            BasePositions.Add(row.Current);
+            Vector3 position = this.quadrant * row.Current;
+            Quaternion rotation = Quaternion.LookRotation(this.viewpoint);
 
-        //PositionManager.AssignPosition(Hand, PlayerID: this.playerID, tileState: this.state, numTiles: Hand.Count, perimSize: 3.22f);
+            /*Debug.Log(this.quadrant.eulerAngles);
+            Debug.Log(rotation.eulerAngles);
+            Debug.Log("//");
 
-        /*foreach(GameObject tile in Hand)
-        {
-            tile.GetComponent<DragTile>().enabled = true;
-        }*/
-    }
+            localrotation is -180 so that initial prefab is facing south
+            */
 
-    public void GrabTile(GameObject tile)
-    {
-        Hand.Add(tile);
+            rotation *= Quaternion.Euler(0, 0, tile.GetComponent<TileManager>().GetOrientation());
 
-        IEnumerator<Vector3> row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
-        foreach (GameObject _tile in Hand)
-        {
-            row.MoveNext();
-            position = this.quadrant * row.Current;
-            rotation = this.quadrant * Quaternion.Euler((int) this.state, 0, 0);
-            
-            _tile.GetComponent<TileManager>().SetDestination(position, rotation, 2f);
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
         }
     }
-
-    public void OpenTile(GameObject tile)
+    public virtual void OpenTile(GameObject tile)
     {
-        Open.Add(tile);
-        Hand.Remove(tile);
+        OpenTile(new List<GameObject> { tile });
+    }
 
-        IEnumerator<Vector3> row = GameManager.DistributeRow(Open.Count, 2.75f, this.state);
-        foreach (GameObject _tile in Open)
+    public virtual void OpenTile(List<GameObject> tiles)
+    {
+        Open.AddRange(tiles);
+        Hand.RemoveAll(tiles.Contains);
+
+        IEnumerator<Vector3> row;
+
+        row = GameManager.DistributeRow(Open.Count, 2.75f, GameManager.FacePreset.Opened);
+        foreach (GameObject tile in Open)
         {
             row.MoveNext();
-            position = this.quadrant * row.Current;
-            rotation = this.quadrant * Quaternion.Euler((int) GameManager.FacePreset.Opened, 0, 0);
+            Vector3 position = this.quadrant * row.Current;
+            Quaternion rotation = this.quadrant * Quaternion.Euler((int) GameManager.FacePreset.Opened, 0, 180);
             
-            _tile.GetComponent<TileManager>().SetDestination(position, rotation);
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
+            tile.GetComponent<DragTile>().enabled = false;
         }
 
+        BasePositions = new List<Vector3>();
         row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
-        foreach (GameObject _tile in Open)
+        foreach (GameObject tile in Hand)
         {
             row.MoveNext();
-            position = this.quadrant * row.Current;
-            rotation = this.quadrant * Quaternion.Euler((int) this.state, 0, 0);
+            BasePositions.Add(row.Current);
+            Vector3 position = this.quadrant * row.Current;
+            Quaternion rotation = tile.transform.rotation;
             
-            _tile.GetComponent<TileManager>().SetDestination(position, rotation);
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
+            tile.GetComponent<DragTile>().UpdateBasePosition(position);
         }
-
-        //PositionManager.AssignPosition(Open, PlayerID: this.playerID, tileState: "Opened", numTiles: Open.Count, perimSize: 2.75f);
-        //PositionManager.AssignPosition(Hand, PlayerID: this.playerID, tileState: this.state, numTiles: Hand.Count, perimSize: 3.22f);
-        
-        foreach (GameObject _tile in Open)
-        {
-            _tile.GetComponent<DragTile>().enabled = false;
-            // _tile.GetComponent<TileManager>().enabled = true;
-        }
-
-        foreach (GameObject _tile in Hand)
-        {
-            Vector3 currentDestination = _tile.GetComponent<TileManager>().GetDestination().Item1;
-            _tile.GetComponent<DragTile>().UpdateBasePosition(currentDestination);
-            // _tile.GetComponent<TileManager>().enabled = true;
-        }
-
-        // PositionManager.ScheduleEvent(duration: 0.02f, cluster: Open.Count + Hand.Count, tileArray: Hand.Concat(Open).ToList());
     }
-    public void KangTile()
+
+    public virtual void KangTile()
     {
 
     }
 
-    public void TossTile(GameObject tile)
+    public virtual void TossTile(GameObject tile)
     {
         tile.GetComponent<DragTile>().enabled = false;
     }
 }
+
+public class Human : Player
+{
+    public Human(int playerID, string playerName) : base(playerID, playerName)
+    {
+        this.quadrant = Quaternion.Euler(0, -90 * playerID, 0);
+        this.viewpoint = this.quadrant * Camera.main.transform.position;
+        this.state = GameManager.FacePreset.Player;
+    }
+
+    public override void GrabTile(List<GameObject> tiles)
+    {
+        foreach (GameObject tile in tiles)
+        {
+            tile.GetComponent<DragTile>().enabled = true;
+        }
+        base.GrabTile(tiles);
+    }
+    
+    public override void OpenTile(List<GameObject> tiles)
+    {
+        foreach (GameObject tile in tiles)
+        {
+            tile.GetComponent<DragTile>().enabled = false;
+        }
+        base.OpenTile(tiles);
+    }
+    
+    /*
+    public override void KangTile(List<GameObject> tiles)
+    {
+        foreach (GameObject tile in tiles)
+        {
+            tile.GetComponent<DragTile>().enabled = false;
+        }
+        base.OpenTile(tiles);
+    }
+    
+    public override void TossTile(List<GameObject> tiles)
+    {
+        foreach (GameObject tile in tiles)
+        {
+            tile.GetComponent<DragTile>().enabled = false;
+        }
+        base.OpenTile(tiles);
+    }
+    */
+}
+
+public class Bot : Player
+{
+    public Bot(int playerID, string playerName) : base(playerID, playerName)
+    {
+        this.quadrant = Quaternion.Euler(0, -90 * playerID, 0);
+        // this.viewpoint = this.quadrant * new Vector3(0, 0, float.NegativeInfinity);
+        this.viewpoint = this.quadrant * new Vector3(0, 0, -10);
+        this.state = GameManager.FacePreset.Stand;
+    }
+}
+
+
+// change overloading so that single grab is default rather than multi grab
+
+// BasePositions array not necessary, just sub with tile at spec index

@@ -2,20 +2,23 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// interface player
 public class DragTile : MonoBehaviour
 {
     GameObject swapTile; 
-    private bool clicked = false, activated = false;
+    private bool leftClicked = false, rightClicked = false, activated = false;
     private float rightBound, leftBound;
     private float longPressTimer = 0f, longPressDuration = 0.25f;
-    private Vector3 screenPoint, mouseOffset, hoverOffset = new Vector3(0, +0.06f, -0.05f);
+    public Vector3 screenPoint, mouseOffset, hoverOffset = new Vector3(0, +0.06f, -0.05f);
     private Quaternion baseRotation;
+    private Coroutine hoverRef;
     public Vector3 basePosition;
     public int index, handCount;
     public void UpdateBasePosition(Vector3 BasePosition)
     {
         handCount = GameManager.Players[0].Hand.Count;
         basePosition = BasePosition;
+        baseRotation = transform.rotation;
     }
     void OnEnable()
     {
@@ -28,124 +31,169 @@ public class DragTile : MonoBehaviour
     }
     void OnMouseDown()
     {        
-        //if (GameManager.noRunningSchedules == true)
-        if (activated)
+        if (activated && SortTile.busySorting != true)
         {
             index = GameManager.Players[0].Hand.IndexOf(gameObject);
             longPressTimer = 0f;
-            clicked = true;
-
 
             screenPoint = Camera.main.WorldToScreenPoint(transform.position);
             mouseOffset = basePosition - Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, 0, screenPoint.z));
 
-            rightBound = ((handCount / 2) * GameManager.tileSize.x - GameManager.tileOffset.x);
-            leftBound = -((handCount / 2) * GameManager.tileSize.x - GameManager.tileOffset.x);
+            leftBound = GameManager.Players[0].Hand[0].transform.position.x - 0.01f;
+            rightBound = GameManager.Players[0].Hand[GameManager.Players[0].Hand.Count - 1].transform.position.x + 0.01f;
 
-            if (Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftControl))
+            if (Input.GetKey(KeyCode.R))
             {
-                baseRotation = transform.rotation * Quaternion.Euler(0, 0, 180);
+                StartCoroutine(HoverRotate());
             }
             else
             {
-                baseRotation = transform.rotation;
+                leftClicked = true;
+                // hoverRef = StartCoroutine(Hover());
             }
 
-            //GetComponent<TileManager>().AddDestination(basePosition + hoverOffset, baseRotation, 1);
-
-            //GetComponent<TileManager>().enabled = true;
-            //PositionManager.ScheduleEvent(0.05f, 1, new List<GameObject> { gameObject });
-            StartCoroutine(Hover());
         }
     }
     void OnMouseDrag()
     {
-        if (activated && clicked)
+        if (activated && leftClicked)
         {
-            if (longPressTimer < longPressDuration)
-            {
-                longPressTimer += Time.deltaTime;
-                return;
-            }
-            
             Vector3 mousePosition = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, 0, screenPoint.z));
             Vector3 resultPosition = mousePosition + mouseOffset;
-            float boundedPosition = Mathf.Clamp(resultPosition.x, leftBound, rightBound);
-            transform.position = new Vector3(boundedPosition, transform.position.y, transform.position.z);
 
-            while (index < handCount - 1 && transform.position.x > GameManager.Players[0].Hand[index + 1].GetComponent<DragTile>().basePosition.x)
+            Vector3 position = transform.position;
+            position.x = Mathf.Clamp(resultPosition.x, leftBound, rightBound);
+
+            if (longPressTimer < longPressDuration)
             {
-                swapTile = GameManager.Players[0].Hand[index + 1];
-                GameManager.Players[0].Hand[index] = swapTile;
-                GameManager.Players[0].Hand[index + 1] = gameObject;
+                position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, longPressTimer / longPressDuration);
+                position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, longPressTimer / longPressDuration);
 
-                swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
-                // swapTile.GetComponent<TileManager>().enabled = true;
-
-                Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
-                swapTile.GetComponent<DragTile>().basePosition = basePosition;
-                basePosition = temp;
-
-                index = index + 1;
+                longPressTimer += Time.deltaTime;
             }
 
-            while (0 < index && transform.position.x < GameManager.Players[0].Hand[index - 1].GetComponent<DragTile>().basePosition.x)
-            {
-                swapTile = GameManager.Players[0].Hand[index - 1];
-                GameManager.Players[0].Hand[index] = swapTile;
-                GameManager.Players[0].Hand[index - 1] = gameObject;
+            transform.position = position;
 
-                swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
-                // swapTile.GetComponent<TileManager>().enabled = true;
-
-                Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
-                swapTile.GetComponent<DragTile>().basePosition = basePosition;
-                basePosition = temp;
-
-                index = index - 1;
-
-                //GameManager.noRunningSchedules = false;
-            }
+            DragLogic();
         }
     }
 
     void OnMouseUp()
     {
-        if (activated && clicked)
+        /*if (activated && (leftClicked || rightClicked))
         {
-            if (longPressTimer < longPressDuration) // and if cmd is not pressed
+            if (leftClicked && longPressTimer < longPressDuration)
             {
                 // throw tile
+                StopCoroutine(hoverRef);
                 GameManager.Players[0].OpenTile(gameObject);
             }
             else
             {
                 // return to basePosition
-                GetComponent<TileManager>().SetDestination(basePosition, baseRotation, 1);
+                StopCoroutine(hoverRef);
+                GetComponent<TileManager>().SetDestination(basePosition, baseRotation, 0.05f);
                 // PositionManager.ScheduleEvent(0.05f, 1, new List<GameObject> { gameObject });
+            }
+        }*/
+
+        if (activated && leftClicked)
+        {
+            // StopCoroutine(hoverRef);
+            if (longPressTimer < longPressDuration)
+            {
+                GameManager.Players[0].OpenTile(gameObject);
+            }
+            else
+            {
+                GetComponent<TileManager>().SetDestination(basePosition, baseRotation, 0.05f);
             }
         }
 
-        clicked = false;
+        leftClicked = false;
+        rightClicked = false;
+    }
+
+    public void DragLogic()
+    {   
+        index = GameManager.Players[0].Hand.IndexOf(gameObject);
+        while (index < handCount - 1 && transform.position.x >= GameManager.Players[0].Hand[index + 1].GetComponent<DragTile>().basePosition.x)
+        {
+            swapTile = GameManager.Players[0].Hand[index + 1];
+            GameManager.Players[0].Hand[index] = swapTile;
+            GameManager.Players[0].Hand[index + 1] = gameObject;
+
+            swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
+
+            Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
+            swapTile.GetComponent<DragTile>().basePosition = basePosition;
+            basePosition = temp;
+
+            index = index + 1;
+        }
+
+        while (0 < index && transform.position.x <= GameManager.Players[0].Hand[index - 1].GetComponent<DragTile>().basePosition.x)
+        {
+            swapTile = GameManager.Players[0].Hand[index - 1];
+            GameManager.Players[0].Hand[index] = swapTile;
+            GameManager.Players[0].Hand[index - 1] = gameObject;
+
+            swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
+
+            Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
+            swapTile.GetComponent<DragTile>().basePosition = basePosition;
+            basePosition = temp;
+
+            index = index - 1;
+        }
     }
 
     IEnumerator Hover()
     {
-        float elapsedTime = 0f;
-
-        while (elapsedTime < 0.25f)
+        float secondsTravelled = 0f;
+        while (secondsTravelled < 0.25f) // change to if secondsTravelled < 0.25f or LerpFactor < 1
         {
-            transform.position = Vector3.Lerp(basePosition, basePosition + hoverOffset, elapsedTime / 0.25f);
-            elapsedTime += Time.deltaTime;
+            Vector3 position = transform.position;
+            position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, secondsTravelled / 0.25f);
+            position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, secondsTravelled / 0.25f);
+            transform.position = position;
+
+            secondsTravelled += Time.deltaTime;
             yield return null;
         }
     }
-
-    void Update()
+    IEnumerator HoverRotate()
     {
+        float secondsTravelled = 0f;
+        Quaternion startRot = baseRotation;
+        Quaternion finalRot = baseRotation * Quaternion.Euler(0, 0, 180);
+        
+        baseRotation = finalRot;
 
+        while (secondsTravelled < 0.25f)
+        {
+            Vector3 position = transform.position;
+            position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, secondsTravelled / 0.25f);
+            position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, secondsTravelled / 0.25f);
+            transform.position = position;
+
+            transform.rotation = Quaternion.Lerp(startRot, finalRot, secondsTravelled / 0.25f);
+            
+            secondsTravelled += Time.deltaTime;
+            yield return null;
+        }
+
+        GetComponent<TileManager>().SetDestination(basePosition, baseRotation, 0.05f);
+
+        /*
+        hoverrotate should be:
+        1. hoverup
+        2. rotate
+        3. hoverdown
+
+        not:
+        1. hoverup and rotate
+        2. hoverdown
+        */
     }
 }
-
-
-// enable every time hand length changes
