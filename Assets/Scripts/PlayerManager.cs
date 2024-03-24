@@ -9,7 +9,6 @@ using UnityEngine;
 
 public abstract class Player
 {
-    public List<Vector3> BasePositions = new List<Vector3>();
     public List<GameObject> Hand = new List<GameObject>();
     public List<GameObject> Open = new List<GameObject>();
 
@@ -26,6 +25,20 @@ public abstract class Player
         this.playerName = playerName;
     }
 
+    void DistributeHand()
+    {
+        IEnumerator<Vector3> row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
+        foreach (GameObject tile in Hand)
+        {
+            row.MoveNext();
+            Vector3 position = this.quadrant * row.Current;
+            Quaternion rotation = tile.GetComponent<DragTile>().baseRotation;
+
+            // tile.GetComponent<TileManager>().SetDestination(position, 0.1f);
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
+        }
+    }
+
     public virtual void GrabTile(GameObject tile)
     {
         GrabTile(new List<GameObject> { tile });
@@ -36,29 +49,13 @@ public abstract class Player
         Hand.AddRange(tiles);
         foreach(GameObject tile in tiles)
         {
-            tile.GetComponent<TileManager>().SetOrientation(new Random().Next(2) * 180);
+            Quaternion xRot = Quaternion.LookRotation(this.viewpoint);
+            Quaternion zRot = Quaternion.Euler(0, 0, new Random().Next(2) * 180);
+
+            tile.GetComponent<DragTile>().baseRotation = xRot * zRot;
         }
 
-        BasePositions = new List<Vector3>();
-        IEnumerator<Vector3> row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
-        foreach (GameObject tile in Hand)
-        {
-            row.MoveNext();
-            BasePositions.Add(row.Current);
-            Vector3 position = this.quadrant * row.Current;
-            Quaternion rotation = Quaternion.LookRotation(this.viewpoint);
-
-            /*Debug.Log(this.quadrant.eulerAngles);
-            Debug.Log(rotation.eulerAngles);
-            Debug.Log("//");
-
-            localrotation is -180 so that initial prefab is facing south
-            */
-
-            rotation *= Quaternion.Euler(0, 0, tile.GetComponent<TileManager>().GetOrientation());
-
-            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
-        }
+        DistributeHand();
     }
     public virtual void OpenTile(GameObject tile)
     {
@@ -70,9 +67,7 @@ public abstract class Player
         Open.AddRange(tiles);
         Hand.RemoveAll(tiles.Contains);
 
-        IEnumerator<Vector3> row;
-
-        row = GameManager.DistributeRow(Open.Count, 2.75f, GameManager.FacePreset.Opened);
+        IEnumerator<Vector3> row = GameManager.DistributeRow(Open.Count, 2.75f, GameManager.FacePreset.Opened);
         foreach (GameObject tile in Open)
         {
             row.MoveNext();
@@ -80,21 +75,9 @@ public abstract class Player
             Quaternion rotation = this.quadrant * Quaternion.Euler((int) GameManager.FacePreset.Opened, 0, 180);
             
             tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
-            tile.GetComponent<DragTile>().enabled = false;
         }
 
-        BasePositions = new List<Vector3>();
-        row = GameManager.DistributeRow(Hand.Count, 3.22f, this.state);
-        foreach (GameObject tile in Hand)
-        {
-            row.MoveNext();
-            BasePositions.Add(row.Current);
-            Vector3 position = this.quadrant * row.Current;
-            Quaternion rotation = tile.transform.rotation;
-            
-            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
-            tile.GetComponent<DragTile>().UpdateBasePosition(position);
-        }
+        DistributeHand();
     }
 
     public virtual void KangTile()
@@ -104,11 +87,24 @@ public abstract class Player
 
     public virtual void TossTile(GameObject tile)
     {
-        tile.GetComponent<DragTile>().enabled = false;
+        Hand.Remove(tile);
+        (Vector3 position, Quaternion rotation) = TossTiler.RandomTossPosition();
+        GameManager.TileToss.Add(tile);
+        
+        // determine position and rotation
+
+        //tile.GetComponent<TileManager>().SetDestination(new Vector3(0, 0, 0), Quaternion.Euler((int) GameManager.FacePreset.Opened, 0, 0), 0.05f);
+        tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
+        DistributeHand();
+
+        //tile.GetComponent<Rigidbody>().isKinematic = true;
+        tile.GetComponent<BoxCollider>().isTrigger = false;
+        tile.AddComponent<DragToss>();
+        GameManager.currentTurnRunning = false;
     }
 }
 
-public class Human : Player
+public class Human : Player // implement as singleton so that e.g. Human.Hand()
 {
     public Human(int playerID, string playerName) : base(playerID, playerName)
     {
@@ -119,20 +115,20 @@ public class Human : Player
 
     public override void GrabTile(List<GameObject> tiles)
     {
+        base.GrabTile(tiles);
         foreach (GameObject tile in tiles)
         {
             tile.GetComponent<DragTile>().enabled = true;
         }
-        base.GrabTile(tiles);
     }
     
     public override void OpenTile(List<GameObject> tiles)
     {
+        base.OpenTile(tiles);
         foreach (GameObject tile in tiles)
         {
             tile.GetComponent<DragTile>().enabled = false;
         }
-        base.OpenTile(tiles);
     }
     
     /*
@@ -144,16 +140,12 @@ public class Human : Player
         }
         base.OpenTile(tiles);
     }
-    
-    public override void TossTile(List<GameObject> tiles)
-    {
-        foreach (GameObject tile in tiles)
-        {
-            tile.GetComponent<DragTile>().enabled = false;
-        }
-        base.OpenTile(tiles);
-    }
     */
+    public override void TossTile(GameObject tile)
+    {
+        tile.GetComponent<DragTile>().enabled = false;
+        base.TossTile(tile);
+    }
 }
 
 public class Bot : Player
@@ -170,4 +162,9 @@ public class Bot : Player
 
 // change overloading so that single grab is default rather than multi grab
 
-// BasePositions array not necessary, just sub with tile at spec index
+
+// get rid of FacePreset
+// get rid of orientation in TileManager since BaseRotation already exists
+
+
+// convert dW dN dS dE -> to -> tW tN tS tE

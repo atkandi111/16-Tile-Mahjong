@@ -8,6 +8,7 @@ using Vector3 = UnityEngine.Vector3;
 public class SortTile : MonoBehaviour
 {
     public static bool busySorting = false;
+    private static string suitOrder, unitOrder;
 
     void Logger(List<string> list)
     {
@@ -43,7 +44,7 @@ public class SortTile : MonoBehaviour
 
         /* Sign tiles with (list_index / list_length) to preserve arrangement */
         List<string> tileNames = Hand
-            .Select((tile, index) => $"{tile.name}.{100 * index / Hand.Count}")
+            .Select((tile, index) => $"{tile.name}.{(100 * index / Hand.Count).ToString("00")}")
             .ToList();
 
         /* Generate sorted list of hand's tile names */
@@ -56,224 +57,201 @@ public class SortTile : MonoBehaviour
             .Select(name => sortNames.IndexOf(name))
             .ToList();
 
-        // Proof of Optimality (Lemma 1): 
-        // https://doi.org/10.1090/S0273-0979-99-00796-X
-
         /* Decompose targetIndices into increasing subsequences */
         List<int> mainSubsequence = new List<int>();
         List<List<int>> increasingSubsequences = new List<List<int>>();
-        foreach (int rank in tileRanks)
+
+        foreach (int num in tileRanks)
         {
-            bool numWasAdded = false;
-            List<int> seqn = new List<int>();
-            for (int i = 0; i < increasingSubsequences.Count - 1; i++)
+            for (int i = 0; i <= increasingSubsequences.Count; i++)
             {
-                seqn = increasingSubsequences[i];
-                if (rank >= seqn[seqn.Count - 1])
+                if (i == increasingSubsequences.Count)
                 {
-                    seqn.Add(rank);
-                    numWasAdded = true;
+                    increasingSubsequences.Add(new List<int>() { num });
+                    break;
+                }
+
+                if (num > increasingSubsequences[i].Last())
+                {
+                    increasingSubsequences[i].Add(num);
                     break;
                 }
             }
+        };
 
-            if (numWasAdded == false)
-            {
-                seqn = new List<int>() {rank};
-                increasingSubsequences.Add(seqn);
-            }
-
-            if (mainSubsequence.Count < seqn.Count)
+        foreach (List<int> seqn in increasingSubsequences)
+        {
+            if (mainSubsequence.Count <= seqn.Count)
             {
                 mainSubsequence = seqn;
             }
         }
 
-        /*List<List<int>> increasingSubsequences = tileRanks.Aggregate(new List<List<int>>(), (seqn, num) =>
-        {
-            if (seqn.Count == 0 || num <= seqn.Last().Last()) 
-            {
-                seqn.Add(new List<int>());
-            }
-            seqn.Last().Add(num);
-
-            if (mainSubsequence.Count < seqn.Last().Count)
-            {
-                mainSubsequence = seqn.Last();
-            }
-
-            return seqn;
-        });*/
-
         increasingSubsequences.Remove(mainSubsequence);
-        foreach (List<int> seqnSample in increasingSubsequences)
+        foreach (List<int> seqn in increasingSubsequences)
         {
-            //while (seqn.Any())
-            if (true)
+            List<GameObject> tiles = new List<GameObject>() {};
+            List<Vector3> tileTarget = new List<Vector3>() {};
+
+            /*
+            bool leftToRight = true;
+            foreach (int rank in seqn)
             {
-                // List<int> seqnSample = seqn.GetRange(0, Math.Min(seqn.Count, 3));
-                // seqn.RemoveRange(0, Math.Min(seqn.Count, 3));
-                Logger(Hand);
+                int startIndex = tileRanks.BinarySearch(rank);
 
-                List<GameObject> tiles = new List<GameObject>() {};
-                List<int> gotos = new List<int>() {};
-                List<Vector3> tileTarget = new List<Vector3>() {};
+                tileRanks.Remove(rank);
+                int mainIndex = mainSubsequence.BinarySearch(rank);
+                int finalIndex = tileRanks.BinarySearch(mainSubsequence[mainIndex]);
 
-                foreach (int rank in seqnSample)
-                {
-                    /*
-                    In mainSubsequence, get the smallest larger number than the targetIndex
-                    Insert targetIndex before that number
+                mainSubsequence.Insert(mainIndex, rank);
+                tileRanks.Insert(finalIndex, rank);
 
-                    e.g.
-                    list: [3, 5, 9] , num: 4
-                    list: [3, 4, 5, 9]
-                    */
+                leftToRight = (startIndex < finalIndex);
+            }
 
-                    int startIndex = tileRanks.IndexOf(rank);
-                    GameObject currentTile = Hand[startIndex];
-
-                    Hand.Remove(currentTile);
-                    tileRanks.Remove(rank);
-
-                    int finalIndex = 0;
-
-                    for (int i = 0; i <= mainSubsequence.Count; i++)
-                    {
-                        if (i == mainSubsequence.Count)
-                        {
-                            int preceedingRank = mainSubsequence[i - 1];
-                            mainSubsequence.Insert(i, rank);
-
-                            finalIndex = tileRanks.IndexOf(preceedingRank) + 1;
-                            break;
-                            /*
-                            mainSubsequence.Insert(i, rank);
-                            finalIndex = tileRanks.Count;
-                            */
-                        }
-                        if (mainSubsequence[i] > rank) // >=
-                        {
-                            int preceedingRank = mainSubsequence[i];
-                            mainSubsequence.Insert(i, rank);
-
-                            finalIndex = tileRanks.IndexOf(preceedingRank);
-                            break;
-                        } 
-                    }
-
-                    GameObject targetTile = null;
-                    Debug.Log(finalIndex);
-                    if (finalIndex > startIndex)
-                    {
-                        targetTile = Hand[finalIndex - 1];
-                        Debug.Log(currentTile.name + " go to " + targetTile.name);
-                    }
-                    if (finalIndex < startIndex)
-                    {
-                        targetTile = Hand[finalIndex];
-                        Debug.Log(currentTile.name + " go to " + targetTile.name);
-                    }
-                    Hand.Insert(finalIndex, currentTile);
-                    tileRanks.Insert(finalIndex, rank);
-
-                    if (finalIndex > startIndex)
-                    {
-                        tiles.Insert(0, currentTile);
-                        gotos.Insert(0, finalIndex);
-                    }
-                    
-                    if (finalIndex < startIndex)
-                    {
-                        tiles.Add(currentTile);
-                        gotos.Add(finalIndex);
-                    }
-                }
-
-                foreach (GameObject tile in tiles)
-                {
-                    int index = Hand.IndexOf(tile);
-                    tileTarget.Add(GameManager.Players[0].BasePositions[index]);
-                }                
-
-                Vector3 position;
-                float elapsedTime = 0f;
-                while (elapsedTime < 0.25f)
-                {
-                    foreach (GameObject tile in tiles)
-                    {
-                        Vector3 basePosition = tile.GetComponent<DragTile>().basePosition;
-                        Vector3 hoverOffset = tile.GetComponent<DragTile>().hoverOffset;
-
-                        position = tile.transform.position;
-                        position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, elapsedTime / 0.25f);
-                        position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, elapsedTime / 0.25f);
-                        tile.transform.position = position;
-                    }
-
-                    elapsedTime += Time.deltaTime;
-                    yield return null;
-                }
-
+            foreach (int rank in seqn)
+            {
+                int index = tileRanks.IndexOf(rank);
                 
-                elapsedTime = 0f;
-                while (elapsedTime < 0.5f)
+                if (leftToRight)
                 {
-                    foreach (GameObject tile in tiles)
+                    tiles.Insert(0, currentTile);
+                    tileTarget.Insert(0, GameManager.Players[0].Hand[index].GetComponent<DragTile>().basePosition);
+                }
+                else
+                {
+                    tiles.Add(currentTile);
+                    tileTarget.Add(GameManager.Players[0].Hand[index].GetComponent<DragTile>().basePosition);
+                }
+            }
+            */
+
+            foreach (int rank in seqn)
+            {
+                /*
+                In mainSubsequence, get the smallest rank larger than current rank
+                Insert rank before that number in Hand
+
+                e.g.
+                mainSub: [3, 5, 9] , num: 4
+                Hand: [15, 3, 16, 4, 5, 17, 9]
+                */
+
+                int startIndex = tileRanks.IndexOf(rank);
+                int finalIndex = 0;
+
+                GameObject currentTile = Hand[startIndex];
+                Hand.Remove(currentTile);
+                tileRanks.Remove(rank);
+
+                for (int i = 0; i <= mainSubsequence.Count; i++)
+                {
+                    if (i == mainSubsequence.Count)
                     {
-                        Vector3 startPos = tile.GetComponent<DragTile>().basePosition;
-                        Vector3 finalPos = tileTarget[tiles.IndexOf(tile)];
-
-                        position = tile.transform.position;
-                        position.x = Mathf.Lerp(startPos.x, finalPos.x, elapsedTime / 0.5f);
-                        tile.transform.position = position;
-                        tile.GetComponent<DragTile>().DragLogic();
+                        finalIndex = tileRanks.Count;
+                        mainSubsequence.Insert(i, rank);
+                        break;
                     }
+                    if (mainSubsequence[i] > rank)
+                    {
+                        finalIndex = tileRanks.IndexOf(mainSubsequence[i]);
+                        mainSubsequence.Insert(i, rank);
+                        break;
+                    } 
+                }
 
-                    elapsedTime += Time.deltaTime;
-                    yield return null;
+                /*GameObject targetTile = null;
+                Debug.Log(finalIndex);
+                if (finalIndex > startIndex)
+                {
+                    targetTile = Hand[finalIndex - 1];
+                    Debug.Log(currentTile.name + " go to " + targetTile.name);
+                }
+                if (finalIndex < startIndex)
+                {
+                    targetTile = Hand[finalIndex];
+                    Debug.Log(currentTile.name + " go to " + targetTile.name);
+                }*/
+                Hand.Insert(finalIndex, currentTile);
+                tileRanks.Insert(finalIndex, rank);
+
+                /* NOTE: order in tiles matter because of swapTile */
+                if (finalIndex > startIndex)
+                {
+                    tiles.Insert(0, currentTile);
                 }
                 
+                if (finalIndex < startIndex)
+                {
+                    tiles.Add(currentTile);
+                }
+            }
+
+            /*foreach (int rank in seqn)
+            {
+                int index = tileRanks.IndexOf(rank);
+                tileTarget.Add(GameManager.Players[0].Hand[index].GetComponent<DragTile>().basePosition);
+
+                // maybe a BasePosition array would be best
+            }*/
+
+            foreach (GameObject tile in tiles)
+            {
+                int index = Hand.IndexOf(tile);
+                tileTarget.Add(GameManager.Players[0].Hand[index].GetComponent<DragTile>().basePosition);
+            }   
+
+            foreach (GameObject tile in tiles)
+            {
+                StartCoroutine(tile.GetComponent<DragTile>().Hover());
+            }
+            yield return new WaitForSeconds(0.15f);
+            
+            float elapsedTime = 0f;
+            while (elapsedTime < 0.5f)
+            {
                 foreach (GameObject tile in tiles)
                 {
+                    Vector3 startPos = tile.GetComponent<DragTile>().basePosition;
                     Vector3 finalPos = tileTarget[tiles.IndexOf(tile)];
-                    position = tile.transform.position;
-                    position.x = finalPos.x;
+
+                    Vector3 position = tile.transform.position;
+                    position.x = Mathf.Lerp(startPos.x, finalPos.x, elapsedTime / 0.5f);
                     tile.transform.position = position;
                     tile.GetComponent<DragTile>().DragLogic();
                 }
 
-                for (int i = 0; i < GameManager.Players[0].Hand.Count; i++)
+                elapsedTime += Time.deltaTime;
+                yield return null;
+            }
+            
+            foreach (GameObject tile in tiles)
+            {
+                Vector3 finalPos = tileTarget[tiles.IndexOf(tile)];
+                Vector3 position = tile.transform.position;
+                position.x = finalPos.x;
+                tile.transform.position = position;
+                tile.GetComponent<DragTile>().DragLogic();
+            }
+
+            for (int i = 0; i < GameManager.Players[0].Hand.Count; i++)
+            {
+                if (Hand[i] != GameManager.Players[0].Hand[i])
                 {
-                    if (Hand[i] != GameManager.Players[0].Hand[i])
-                    {
-                        Debug.Log("-----/-----");
-                        Logger(Hand);
-                        Logger(GameManager.Players[0].Hand);
-                        Debug.Log("-----/-----");
-                        yield return new WaitForSeconds(100f);
-                        break;
-                    }
-                }
-
-                elapsedTime = 0f;
-                while (elapsedTime < 0.25f)
-                {
-                    foreach (GameObject tile in tiles)
-                    {
-                        Vector3 basePosition = tile.GetComponent<DragTile>().basePosition;
-                        Vector3 hoverOffset = tile.GetComponent<DragTile>().hoverOffset;
-
-                        position = tile.transform.position;
-                        position.y = Mathf.Lerp(basePosition.y + hoverOffset.y, basePosition.y, elapsedTime / 0.25f);
-                        position.z = Mathf.Lerp(basePosition.z + hoverOffset.z, basePosition.z, elapsedTime / 0.25f);
-                        tile.transform.position = position;
-                    }
-
-                    elapsedTime += Time.deltaTime;
-                    yield return null;
+                    Debug.Log("-----/-----");
+                    Logger(Hand);
+                    Logger(GameManager.Players[0].Hand);
+                    Debug.Log("-----/-----");
+                    yield return new WaitForSeconds(100f);
+                    break;
                 }
             }
+
+            foreach (GameObject tile in tiles)
+            {
+                StartCoroutine(tile.GetComponent<DragTile>().HoverDown());
+            }
+            yield return new WaitForSeconds(0.15f);
         }
 
         busySorting = false;
@@ -281,18 +259,16 @@ public class SortTile : MonoBehaviour
 
     public class TileComparer : IComparer<string>
     {    
-        string suitOrder = null;
         private string SuitOrder()
         {
             /* Create suit hierarchy */
             Dictionary<char, int> suitHierarchy = new Dictionary<char, int>
             {
                 {'b', 0}, {'c', 0}, {'s', 0},   // Leftmost
-                {'t', 1}, {'d', 1},             // Middle
-                {'f', 2}                        // Rightmost
+                {'t', 1}, {'f', 2}              // Rightmost
             };
 
-            /* Calculate index density (the average index of all tiles of a suit) */
+            /* Calculate index density (the median index of all tiles of a suit) */
             var indexDensity = GameManager.Players[0].Hand
                 .Select((tile, index) => (suit: tile.name[0], index))
                 .GroupBy(pair => pair.suit)
@@ -309,30 +285,54 @@ public class SortTile : MonoBehaviour
 
             return string.Concat(sortedLetters);
         }
+
+        private string UnitOrder()
+        {
+            /* Calculate index density (the median index of all tiles of a unit) */
+            var indexDensity = GameManager.Players[0].Hand
+                .Select((tile, index) => (unit: tile.name[1], index))
+                .Where(pair => Char.IsLetter(pair.unit))
+                .GroupBy(pair => pair.unit)
+                .ToDictionary(
+                    grp => grp.Key, 
+                    grp => grp.Average(pair => pair.index)
+                );
+
+            /* Sort unit based on (Hierarchy) and (Index Density) */
+            var sortedLetters = indexDensity
+                .OrderBy(kvp => kvp.Value)
+                .Select(kvp => kvp.Key);
+
+            return string.Concat(sortedLetters) + "123456789";
+        }
+
         public int Compare(string x, string y)
         {
-            /* Extract suit and unit from tile name */
             if (suitOrder == null)
             {
                 suitOrder = SuitOrder();
-                // also create unitOrder
-                // unitOrder automatically has 1-9, but also contains info for tR tG tW dN etc
+                unitOrder = UnitOrder();
             }
 
             int suitX = suitOrder.IndexOf(x[0]);
             int suitY = suitOrder.IndexOf(y[0]);
-            string unitX = x.Substring(1);
-            string unitY = y.Substring(1);
-
-            /* Compare suits first */
             int suitComparison = suitX.CompareTo(suitY);
             if (suitComparison != 0)
             {
                 return suitComparison;
             }
 
-            /* If suits are the same, compare units (and signature) */
-            return unitX.CompareTo(unitY);
+            int unitX = unitOrder.IndexOf(x[1]);
+            int unitY = unitOrder.IndexOf(y[1]);
+            int unitComparison = unitX.CompareTo(unitY);
+            if (unitComparison != 0)
+            {
+                return unitComparison;
+            }
+
+            string signX = x.Substring(3);
+            string signY = y.Substring(3);
+            return signX.CompareTo(signY);
         }
     }
 
@@ -340,12 +340,15 @@ public class SortTile : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.S) && busySorting != true)
         {
-            StartCoroutine(SortTiles());
             busySorting = true;
+
+            suitOrder = null;
+            unitOrder = null;
+            StartCoroutine(SortTiles());
         }
     }
 }
 
 
-// suitOrder should be resetted to null after sorting
-// busySorting should also be resetted to false
+// 12 x 13 14 15 x x x
+// becomes 15 14 13 x 12

@@ -17,16 +17,23 @@ using Debug = UnityEngine.Debug;
 public class GameManager : MonoBehaviour
 {
     public static Player[] Players = new Player[4];
-    public static List<GameObject> TileSet = new List<GameObject>();
+    public static List<GameObject> TileSet = new List<GameObject>(); // convert to array
     public static List<GameObject> TileHands = new List<GameObject>();
-    public static List<GameObject>[] TileWalls = new List<GameObject>[4];
+    public static List<GameObject> TileWalls = new List<GameObject>();
+    public static List<GameObject> TileToss = new List<GameObject>();
+    public static List<GameObject>[] _TileWalls = new List<GameObject>[4];
     public static List<GameObject>[] TileBlocks = new List<GameObject>[4];
 
     public static Vector3 tileSize, tileOffset;
+    public static bool currentTurnRunning = false;
     public enum FacePreset
     {
         Static, Stand = 180, Player = 220, Opened = 270, Closed = 90
     }
+
+    public static Player currentPlayer;
+    private Player mano;
+    private int diceRoll;
 
     void Awake()
     {   
@@ -36,7 +43,7 @@ public class GameManager : MonoBehaviour
             "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
             "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
             "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
-            "dN", "dS", "dW", "dE", "tG", "tR", "tW", "fR", "fB"
+            "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB"
         };
 
         GameObject temp;
@@ -117,6 +124,8 @@ public class GameManager : MonoBehaviour
         Players[1] = new Bot(1, "Player 2");
         Players[2] = new Bot(2, "Player 3");
         Players[3] = new Bot(3, "Player 4");
+
+        mano = Players[0];
     }
     
     void Start()
@@ -139,7 +148,7 @@ public class GameManager : MonoBehaviour
         /* Assign TileWalls and TileBlocks */
         for (int i = 0; i < 4; i++)
         {
-            TileWalls[i] = TileSet.GetRange(i * 20, 20);
+            _TileWalls[i] = TileSet.GetRange(i * 20, 20);
             TileBlocks[i] = TileSet.GetRange(i * 16 + 80, 16);
         }
 
@@ -182,13 +191,13 @@ public class GameManager : MonoBehaviour
                 Vector3 position = quadrant * (row.Current + new Vector3(tileOffset.y, 0, 0));
                 Quaternion rotation = quadrant * Quaternion.Euler((int) face, 0, random.Next(2) * 180);
 
-                TileWalls[PlayerID][i].transform.position = position + new Vector3(0, 0.5f, 0);
-                TileWalls[PlayerID][i].transform.rotation = rotation;
+                _TileWalls[PlayerID][i].transform.position = position + new Vector3(0, 0.5f, 0);
+                _TileWalls[PlayerID][i].transform.rotation = rotation;
             }
 
             /* Assign Tile Blocks Layer 1 */
             row = DistributeRow(tileCount: 8, perimSize: 1.25f, face);
-            for (int i = 0; i < 16; i++) // i < 8
+            for (int i = 0; i < 8; i++)
             {
                 row.MoveNext();
                 Vector3 position = quadrant * row.Current;
@@ -247,7 +256,7 @@ public class GameManager : MonoBehaviour
     { 
         for (int i = 0; i < TileSet.Count; i++)
         {
-            yield return new WaitForSeconds(0.02f);
+            // yield return new WaitForSeconds(0.02f);
             TileSet[i].SetActive(true); 
 
             Vector3 position = TileSet[i].transform.position - new Vector3(0, 0.5f, 0);
@@ -255,7 +264,7 @@ public class GameManager : MonoBehaviour
 
             TileSet[i].GetComponent<TileManager>().SetDestination(position, rotation, 0.2f);
         }
-
+        yield return new WaitForSeconds(0.02f);
         for (int i = 0; i < 4; i++)
         {
             for (int j = 0; j < 4; j++)
@@ -274,18 +283,55 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Players[0].AddComponent<SortTile>();
+        currentPlayer = mano;
+        diceRoll = 12;
+        CompressWalls(diceRoll, mano);
         yield return StartCoroutine(NextTurn());
     }
 
     IEnumerator NextTurn()
     {
-        foreach (GameObject tile in Players[0].Hand)
+        /*foreach (GameObject tile in Players[0].Hand)
         {
             tile.AddComponent<HoverTile>();
-        }
+        }*/
+
+        currentTurnRunning = true;
+
+        currentPlayer.GrabTile(TileWalls[0]);
+        TileWalls.RemoveAt(0);
+
+        ///
+        currentPlayer.TossTile(currentPlayer.Hand[0]);
         yield return null;
     }
+
+    void CompressWalls(int diceRoll, Player mano)
+    {
+        int wallIndex = (Array.IndexOf(Players, mano) + (diceRoll % 4)) * 20;
+        int tileIndex = (20 - diceRoll);
+
+        int index = wallIndex + tileIndex + 1;
+
+        /*List<GameObject> leftHalf = new List<GameObject> (TileSet.GetRange(0, index));
+        List<GameObject> rightHalf = new List<GameObject> (TileSet.GetRange(index, 80 - index));
+
+        leftHalf.Reverse();
+        rightHalf.reverse();*/
+
+        TileWalls.AddRange(TileSet.GetRange(0, index).Reverse<GameObject>().ToList());
+        TileWalls.AddRange(TileSet.GetRange(index, 80 - index).Reverse<GameObject>().ToList());
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.RightArrow) && currentTurnRunning != true)
+        {
+            currentPlayer = Players[(Array.IndexOf(Players, currentPlayer) + 1) % 4];
+            StartCoroutine(NextTurn());
+        }
+    }
+
 }
 
 // create public class Tile that extends and inherits from GameObject
@@ -310,3 +356,5 @@ because stepVector is positive, so that it's easier to left-align
 */
 
 // instead of quadrant, use look at
+
+// replace TileManager with public class Tile

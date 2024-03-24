@@ -8,22 +8,18 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
     private Vector3 startPos, finalPos;
     private Quaternion startRot, finalRot;
     private float lerpFactor, velocity, duration;
-    private int orientation = 0;
 
-    public int GetOrientation()
+    void Awake()
     {
-        return orientation;
-    }
-    public void SetOrientation(int zRotation) // omit and replace with (random (yes or no) * fliporientation)
-    {
-        orientation = zRotation;
-    }
+        BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
+        boxCollider.isTrigger = true;
 
-    public void FlipOrientation()
-    {
-        orientation = 180 - orientation;
+        Rigidbody rigidbody = gameObject.AddComponent<Rigidbody>();
+        rigidbody.isKinematic = false;
+        rigidbody.useGravity = false;
+        rigidbody.drag = 15f;
+        rigidbody.angularDrag = 15f;
     }
-
     public (Vector3, Quaternion) GetDestination()
     {
         return (finalPos, finalRot);
@@ -39,6 +35,8 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
         velocity = 0f;
         duration = smoothTime;
         enabled = true;
+
+        gameObject.GetComponent<DragTile>().UpdateBasePosition(finalPos, finalRot);
     }
 
     public IEnumerator MoveTile(float smoothTime, Vector3? position = null, Quaternion? rotation = null)
@@ -78,7 +76,6 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
         transform.position = Vector3.Lerp(startPos, finalPos, lerpFactor);
         transform.rotation = Quaternion.Lerp(startRot, finalRot, lerpFactor);
         
-        // if(lerpFactor > 0.99f)
         // if (transform.position == finalPos && transform.rotation == finalRot)
         // if (lerpFactor == 1f) // if (finalPos - transform.position < 0.2f)
         if (lerpFactor > 0.999f)
@@ -93,3 +90,5 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
 // change update to coroutine
 // relatively unnoticeable overhead
 // coroutine can be stopped unlike update which needs boolean flag
+
+// transfer baseposition, baserotatioin to tilemanager
