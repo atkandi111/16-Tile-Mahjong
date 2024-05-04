@@ -9,7 +9,7 @@ public class DragTile : MonoBehaviour
     private bool clicked = false, activated = false;
     private float rightBound, leftBound;
     private float longPressTimer = 0f, longPressDuration = 0.25f;
-    private Vector3 screenPoint, mouseOffset, hoverOffset = new Vector3(0, +0.10f, -0.05f);
+    private Vector3 screenPoint, mouseOffset, hoverOffset = new Vector3(0, +0.1f, -0.05f);
     private Coroutine hoverRef;
     public Quaternion baseRotation;
     public Vector3 basePosition;
@@ -18,6 +18,9 @@ public class DragTile : MonoBehaviour
     {
         basePosition = BasePosition;
         baseRotation = BaseRotation;
+        /*hoverOffset = BaseRotation * new Vector3(0, 0.05f, 0.05f);*/
+
+        hoverOffset = Quaternion.Euler(-90f - BaseRotation.eulerAngles.x, 0, 0) * new Vector3(0, 0.1f, 0.05f);
     }
     void OnEnable()
     {
@@ -40,24 +43,23 @@ public class DragTile : MonoBehaviour
             leftBound = GameManager.Players[0].Hand[0].transform.position.x - 0.01f;
             rightBound = GameManager.Players[0].Hand[GameManager.Players[0].Hand.Count - 1].transform.position.x + 0.01f;
 
-            if (Input.GetKey(KeyCode.R))
+            if (isRotatable())
             {
                 StartCoroutine(HoverRotate());
             }
-            else if (Input.GetKey(KeyCode.O) && isOpenable())
+            else if (isOpenable())
             {
                 GameManager.Players[0].OpenTile(gameObject);
             }
-            else if (Input.GetKey(KeyCode.T) && isTossable())
+            else if (isTossable())
             {
                 GameManager.Players[0].TossTile(gameObject);
             }
-            else
+            else if (isDraggable())
             {
                 clicked = true;
                 hoverRef = StartCoroutine(Hover());
             }
-
         }
     }
     void OnMouseDrag()
@@ -93,9 +95,17 @@ public class DragTile : MonoBehaviour
         }
     }
 
+    public bool isRotatable()
+    {
+        if (Input.GetKey(KeyCode.R))
+        {
+            return true;
+        }
+        return false;
+    }
     public bool isOpenable()
     {
-        if (SortTile.busySorting != true && gameObject.name[0] == 'f')
+        if (Input.GetKey(KeyCode.O) && gameObject.name[0] == 'f')
         {
             return true;
         }
@@ -103,7 +113,19 @@ public class DragTile : MonoBehaviour
     }
     public bool isTossable()
     {
-        if (SortTile.busySorting != true)
+        if (Input.GetKey(KeyCode.R) || Input.GetKey(KeyCode.O) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.T))
+        {
+            return false;
+        }
+        if (GameManager.currentPlayer == GameManager.Players[0] && gameObject.name[0] != 'f') // and no tiles moving
+        {
+            return true;
+        }
+        return false;
+    }
+    public bool isDraggable()
+    {
+        if (Input.GetKey(KeyCode.T) && SortTile.busySorting != true)
         {
             return true;
         }
@@ -125,10 +147,6 @@ public class DragTile : MonoBehaviour
             swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
             basePosition = temp;
 
-            /*Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
-            swapTile.GetComponent<DragTile>().basePosition = basePosition;
-            basePosition = temp;*/
-
             index = index + 1;
         }
 
@@ -142,23 +160,22 @@ public class DragTile : MonoBehaviour
             swapTile.GetComponent<TileManager>().SetDestination(basePosition, swapTile.transform.rotation, 0.05f);
             basePosition = temp;
 
-            /*Vector3 temp = swapTile.GetComponent<DragTile>().basePosition;
-            swapTile.GetComponent<DragTile>().basePosition = basePosition;
-            basePosition = temp;*/
-
             index = index - 1;
         }
     }
 
     #region Hover Coroutines
+    float hoverDuration = 0.15f;
+    float rotateDuration = 0.25f;
+
     public IEnumerator Hover()
     {
         float secondsTravelled = 0f;
-        while (secondsTravelled < 0.15f)
+        while (secondsTravelled < hoverDuration)
         {
             Vector3 position = transform.position;
-            position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, secondsTravelled / 0.15f);
-            position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, secondsTravelled / 0.15f);
+            position.y = Mathf.Lerp(basePosition.y, basePosition.y + hoverOffset.y, secondsTravelled / hoverDuration);
+            position.z = Mathf.Lerp(basePosition.z, basePosition.z + hoverOffset.z, secondsTravelled / hoverDuration); 
             transform.position = position;
 
             secondsTravelled += Time.deltaTime;
@@ -168,9 +185,9 @@ public class DragTile : MonoBehaviour
     public IEnumerator HoverDown()
     {
         float secondsTravelled = 0f;
-        while (secondsTravelled < 0.15f)
+        while (secondsTravelled < hoverDuration)
         {
-            transform.position = Vector3.Lerp(basePosition + hoverOffset, basePosition, secondsTravelled / 0.15f);
+            transform.position = Vector3.Lerp(basePosition + hoverOffset, basePosition, secondsTravelled / hoverDuration);
 
             secondsTravelled += Time.deltaTime;
             yield return null;
@@ -179,7 +196,7 @@ public class DragTile : MonoBehaviour
     public IEnumerator HoverRotate()
     {
         StartCoroutine(Hover());
-        yield return new WaitForSeconds(0.15f);
+        yield return new WaitForSeconds(hoverDuration);
 
         Quaternion startRot = baseRotation;
         Quaternion finalRot = baseRotation * Quaternion.Euler(0, 0, 180);
@@ -187,7 +204,7 @@ public class DragTile : MonoBehaviour
         baseRotation = finalRot;
 
         float secondsTravelled = 0f;
-        while (secondsTravelled < 0.25f)
+        while (secondsTravelled < rotateDuration)
         {
             transform.rotation = Quaternion.Lerp(startRot, finalRot, secondsTravelled / 0.25f);
             

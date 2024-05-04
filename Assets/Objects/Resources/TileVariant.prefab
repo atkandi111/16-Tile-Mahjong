@@ -49,6 +49,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -7511558181221131132, guid: 948b66d11cec949178e224e003d0c63a, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: 948b66d11cec949178e224e003d0c63a, type: 3}
       propertyPath: m_Materials.Array.data[0]
       value: 
       objectReference: {fileID: 2100000, guid: b75e5f642bcac4b05b73758657eb26f4, type: 2}
@@ -56,6 +60,10 @@ PrefabInstance:
       propertyPath: m_Materials.Array.data[2]
       value: 
       objectReference: {fileID: 2100000, guid: 3882f7c001a8c4fcd8f39f554fcbefe1, type: 2}
+    - target: {fileID: -7511558181221131132, guid: 948b66d11cec949178e224e003d0c63a, type: 3}
+      propertyPath: m_Materials.Array.data[3]
+      value: 
+      objectReference: {fileID: 2100000, guid: a05e5808ad6374bbaaae16a13c2f4f4d, type: 2}
     - target: {fileID: 919132149155446097, guid: 948b66d11cec949178e224e003d0c63a, type: 3}
       propertyPath: m_Name
       value: TileVariant

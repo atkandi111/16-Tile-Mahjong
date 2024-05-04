@@ -11,25 +11,17 @@ using System.Numerics;
 using Quaternion = UnityEngine.Quaternion;
 using Vector2 = UnityEngine.Vector2; //
 using Vector3 = UnityEngine.Vector3;
-
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
+
 public class GameManager : MonoBehaviour
 {
     public static Player[] Players = new Player[4];
-    public static List<GameObject> TileSet = new List<GameObject>(); // convert to array
-    public static List<GameObject> TileHands = new List<GameObject>();
+    public static GameObject[] TileSet = new GameObject[144]; // convert to private
     public static List<GameObject> TileWalls = new List<GameObject>();
     public static List<GameObject> TileToss = new List<GameObject>();
-    public static List<GameObject>[] _TileWalls = new List<GameObject>[4];
-    public static List<GameObject>[] TileBlocks = new List<GameObject>[4];
 
     public static Vector3 tileSize, tileOffset;
-    public static bool currentTurnRunning = false;
-    public enum FacePreset
-    {
-        Static, Stand = 180, Player = 220, Opened = 270, Closed = 90
-    }
 
     public static Player currentPlayer;
     private Player mano;
@@ -47,38 +39,31 @@ public class GameManager : MonoBehaviour
         };
 
         GameObject temp;
-        foreach (string tileName in names)
+        for (int i = 0; i < 144; i++)
         {
-            for (int tileID = 1; tileID <= 4; tileID++)
+            string tileName = names[i / 4];
+            int tileID = (i % 4) + 1;
+            if (tileName.Contains('f'))
             {
-                /* if no PreFabs yet */
-                // temp = Instantiate(Resources.Load("TileVariant")) as GameObject;
-
-                /* if PreFabs exist */
-                if (tileName.Contains('f')) 
-                {
-                    temp = Instantiate(Resources.Load(tileName + "-" + tileID)) as GameObject;
-                } 
-                else 
-                {
-                    temp = Instantiate(Resources.Load(tileName)) as GameObject;
-                }
-
-                //temp.name = tileName + "-" + tileID;
-                temp.name = tileName;
-
-                temp.transform.localScale = new Vector3(1600, 1600, 2000);
-                temp.transform.rotation = Quaternion.Euler(0, 0, 0);
-
-                temp.AddComponent<TileManager>();
-                temp.AddComponent<DragTile>();
-
-                temp.GetComponent<TileManager>().enabled = false;
-                temp.GetComponent<DragTile>().enabled = false;
-                temp.SetActive(false);
-
-                TileSet.Add(temp);
+                temp = Instantiate(Resources.Load($"{tileName}-{tileID}")) as GameObject;
             }
+            else 
+            {
+                temp = Instantiate(Resources.Load(tileName)) as GameObject;
+            }
+
+            temp.name = tileName;
+            temp.transform.localScale = new Vector3(1600, 1600, 2000);
+            temp.transform.rotation = Quaternion.Euler(0, 0, 0);
+
+            temp.AddComponent<TileManager>();
+            temp.AddComponent<DragTile>();
+
+            temp.GetComponent<TileManager>().enabled = false;
+            temp.GetComponent<DragTile>().enabled = false;
+            temp.SetActive(false);
+
+            TileSet[i] = temp;
         }
 
         /* Set TileSize */
@@ -86,44 +71,22 @@ public class GameManager : MonoBehaviour
         tileSize = renderer.bounds.size;
         tileOffset = tileSize * 0.5f;
 
+        Debug.Log(tileOffset);
         //. size : (tileWidth, tileLength, tileDepth)
         //. orientation : upright
 
-
-        /* Create Prefabs (if not existing) 
-        Material tileCrack = (Material) Resources.Load("Tile Crack");
-        Material tileBack = (Material) Resources.Load("Tile Back");
-        foreach (GameObject tile in TileSet)
-        {
-            string imagePath = tile.name;
-            if (imagePath[0] != 'f')
-            {
-                imagePath = imagePath.Substring(0, 2);
-            }
-            
-            Material tileFace = (Material) Resources.Load("Albedo Map/Materials/" + imagePath);
-            Texture2D tileBump = (Texture2D) Resources.Load("Height Map/" + imagePath);
-            GameObject prefabInstance = Instantiate(Resources.Load("TileVariant")) as GameObject;
-            Renderer prefabRenderer = prefabInstance.GetComponent<Renderer>();
-
-            Material[] materials = prefabRenderer.materials;
-            materials[0] = tileFace;
-            materials[0].SetTexture("_BumpMap", tileBump);
-            materials[0].SetTextureScale("_MainTex", new Vector2(1.2f, 1f));
-            materials[0].SetTextureOffset("_MainTex", new Vector2(0f, 0f));
-
-            materials[1] = tileCrack;
-            materials[2] = tileBack;
-            prefabRenderer.materials = materials;
-            PrefabUtility.SaveAsPrefabAsset(prefabInstance, String.Format("Assets/Objects/Resources/{0}.prefab", imagePath));
-            Destroy(prefabInstance);
-        } */
-
         /* Create Players */
-        Players[0] = new Human(0, "Player 1");
-        Players[1] = new Bot(1, "Player 2");
-        Players[2] = new Bot(2, "Player 3");
-        Players[3] = new Bot(3, "Player 4");
+        GameObject table = GameObject.Find("Table Perimeter");
+
+        Players[0] = table.AddComponent<Human>();
+        Players[1] = table.AddComponent<Bot>();
+        Players[2] = table.AddComponent<Bot>();
+        Players[3] = table.AddComponent<Bot>();
+
+        Players[0].playerID = 0;
+        Players[1].playerID = 1;
+        Players[2].playerID = 2;
+        Players[3].playerID = 3;
 
         mano = Players[0];
     }
@@ -137,7 +100,7 @@ public class GameManager : MonoBehaviour
     {        
         /* Shuffle TileSet using Fisher-Yates */
         Random random = new Random();
-        for (int i = TileSet.Count - 1; i > 0; i--)
+        for (int i = TileSet.Length - 1; i > 0; i--)
         {
             int j = random.Next(0, i + 1);
             GameObject temp = TileSet[i];
@@ -145,136 +108,98 @@ public class GameManager : MonoBehaviour
             TileSet[j] = temp;
         }
 
-        /* Assign TileWalls and TileBlocks */
-        for (int i = 0; i < 4; i++)
-        {
-            _TileWalls[i] = TileSet.GetRange(i * 20, 20);
-            TileBlocks[i] = TileSet.GetRange(i * 16 + 80, 16);
-        }
-
-        /* Assign TileHands */
-        for (int i = 0; i < 4; i++)
-        {
-            for (int j = 0; j < 16; j++)
-            {
-                int quadIndex = (j / 4);
-                int tileIndex = (2 * (4 - i - 1)) + (j % 2) + ((j % 4) / 2) * 8;
-                TileHands.Add(TileBlocks[quadIndex][tileIndex]);
-
-                /*
-                origIndex = 0.1.2.3.4.5.6.7.8.9............
-                quadIndex = 0.0.0.0.1.1.1.1.2.2.2.2.3.3.3.3
-                tileIndex = 0.1.8.9.0.1.8.9.0.1.8.9.0.1.8.9
-                     sums
-                     _%_2   0.1.0.1.0.1.0.1.0.1.0.1.0.1.0.1
-                     _/_2   0.0.8.8.0.0.8.8.0.0.8.8.0.0.8.8
-                  reverse   taking right-left, [i] => [4 - i]
-                  cluster   taking lifted x8, taking adjacent x2
-                */
-            }
-        }
+        // declare diceroll here
 
         /* Set Tile Positions */
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
+
         IEnumerator<Vector3> row;
         for (int PlayerID = 0; PlayerID < 4; PlayerID++)
         {
-            FacePreset face = FacePreset.Closed;
             Quaternion quadrant = Quaternion.Euler(0, -90 * PlayerID, 0);
 
             /* Assign Tile Walls */
-            row = DistributeRow(tileCount: 20, perimSize: 2.24f, face);
+            row = Positioner.DistributeRow(tileCount: 20, perimSize: Perimeter.WallArea, upright: false);
             for (int i = 0; i < 20; i++)
             {
                 row.MoveNext();
                 Vector3 position = quadrant * (row.Current + new Vector3(tileOffset.y, 0, 0));
-                Quaternion rotation = quadrant * Quaternion.Euler((int) face, 0, random.Next(2) * 180);
+                Quaternion rotation = quadrant * Quaternion.Euler(Positioner.FaceDown, 0, random.Next(2) * 180);
 
-                _TileWalls[PlayerID][i].transform.position = position + new Vector3(0, 0.5f, 0);
-                _TileWalls[PlayerID][i].transform.rotation = rotation;
+                TileSet[i + PlayerID * 20].transform.position = position + new Vector3(0, 0.5f, 0);
+                TileSet[i + PlayerID * 20].transform.rotation = rotation;
             }
 
             /* Assign Tile Blocks Layer 1 */
-            row = DistributeRow(tileCount: 8, perimSize: 1.25f, face);
-            for (int i = 0; i < 8; i++)
+            row = Positioner.DistributeRow(tileCount: 8, perimSize: Perimeter.BlockArea, upright: false);
+            for (int i = 80; i < 88; i++)
             {
                 row.MoveNext();
                 Vector3 position = quadrant * row.Current;
-                Quaternion rotation = quadrant * Quaternion.Euler((int) face, 0, random.Next(2) * 180);
+                Quaternion rotation = quadrant * Quaternion.Euler(Positioner.FaceDown, 0, random.Next(2) * 180);
 
-                TileBlocks[PlayerID][i].transform.position = position + new Vector3(0, 0.5f, 0);
-                TileBlocks[PlayerID][i].transform.rotation = rotation;
+                TileSet[i + PlayerID * 16].transform.position = position + new Vector3(0, 0.5f, 0);
+                TileSet[i + PlayerID * 16].transform.rotation = rotation;
             }
 
             /* Assign Tile Blocks Layer 2 */
-            row = DistributeRow(tileCount: 8, perimSize: 1.25f, face);
-            for (int i = 8; i < 16; i++)
+            row = Positioner.DistributeRow(tileCount: 8, perimSize: Perimeter.BlockArea, upright: false);
+            for (int i = 88; i < 96; i++)
             {
                 row.MoveNext();
                 Vector3 position = quadrant * (row.Current + new Vector3(0, tileSize.z, 0));
-                Quaternion rotation = quadrant * Quaternion.Euler((int) face, 0, random.Next(2) * 180);
+                Quaternion rotation = quadrant * Quaternion.Euler(Positioner.FaceDown, 0, random.Next(2) * 180);
 
-                TileBlocks[PlayerID][i].transform.position = position + new Vector3(0, 0.5f, 0);
-                TileBlocks[PlayerID][i].transform.rotation = rotation;
+                TileSet[i + PlayerID * 16].transform.position = position + new Vector3(0, 0.5f, 0);
+                TileSet[i + PlayerID * 16].transform.rotation = rotation;
             }
         }
 
         stopwatch.Stop();
         TimeSpan elapsedTime = stopwatch.Elapsed;
-
-        // Output the elapsed time
         Debug.Log("Elapsed Time: " + elapsedTime);
 
         StartCoroutine(SetupTiles());
     }
-    public static IEnumerator<Vector3> DistributeRow(int tileCount, float perimSize, FacePreset face)
-    {
-        float centerOffset = tileOffset.x - (tileCount * tileSize.x) / 2;
-        float perimOffset = -tileOffset.y - perimSize;
-
-        float liftOffset;
-        switch (face)
-        {
-            case FacePreset.Player: liftOffset = 0.11f; break;
-            case FacePreset.Stand:  liftOffset = tileOffset.y; break;
-            case FacePreset.Opened: liftOffset = tileOffset.z; break;
-            case FacePreset.Closed: liftOffset = tileOffset.z; break;
-            default: liftOffset = tileOffset.z; break;
-        }
-
-        Vector3 position = new Vector3(centerOffset, liftOffset, perimOffset);
-        Vector3 spacing = new Vector3(tileSize.x, 0, 0);
-
-        for (int i = 0; i < tileCount; i++)
-        {
-            yield return position + (spacing * i);
-        }
-    }
-
     IEnumerator SetupTiles()
     { 
-        for (int i = 0; i < TileSet.Count; i++)
+        currentPlayer = mano;
+        diceRoll = 12;
+        CompressWalls(diceRoll, mano);
+
+        foreach (GameObject tile in TileSet)
         {
             // yield return new WaitForSeconds(0.02f);
-            TileSet[i].SetActive(true); 
+            tile.SetActive(true);
 
-            Vector3 position = TileSet[i].transform.position - new Vector3(0, 0.5f, 0);
-            Quaternion rotation = TileSet[i].transform.rotation;
+            Vector3 position = tile.transform.position - new Vector3(0, 0.5f, 0);
+            Quaternion rotation = tile.transform.rotation;
 
-            TileSet[i].GetComponent<TileManager>().SetDestination(position, rotation, 0.2f);
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.2f);
         }
+
         yield return new WaitForSeconds(0.02f);
+
+        diceRoll = 12;
         for (int i = 0; i < 4; i++)
         {
+            int playerID = (i + diceRoll - 1) % 4;
             for (int j = 0; j < 4; j++)
             {
                 yield return new WaitForSeconds(0.3f);
-                Players[i].GrabTile(TileHands.GetRange((i * 16) + (j * 4), 4));
+                Players[playerID].GrabTile(new List<GameObject>() {
+                    TileSet[80 + (i * 2) + (j * 16)],
+                    TileSet[81 + (i * 2) + (j * 16)],
+                    TileSet[88 + (i * 2) + (j * 16)],
+                    TileSet[89 + (i * 2) + (j * 16)],
+                });
             }
+
         }
 
         /* Wait for setup to finish */
+        // use async OR unityEvent
         foreach (GameObject tile in TileSet)
         {
             while (tile.GetComponent<TileManager>().enabled)
@@ -283,27 +208,15 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        currentPlayer = mano;
-        diceRoll = 12;
-        CompressWalls(diceRoll, mano);
-        yield return StartCoroutine(NextTurn());
-    }
-
-    IEnumerator NextTurn()
-    {
-        /*foreach (GameObject tile in Players[0].Hand)
-        {
-            tile.AddComponent<HoverTile>();
-        }*/
-
-        currentTurnRunning = true;
 
         currentPlayer.GrabTile(TileWalls[0]);
-        TileWalls.RemoveAt(0);
+        StackFlower();
+    }
 
-        ///
-        currentPlayer.TossTile(currentPlayer.Hand[0]);
-        yield return null;
+    public static void NextTurn()
+    {
+        currentPlayer = Players[(Array.IndexOf(Players, currentPlayer) + 1) % 4];
+        currentPlayer.GrabTile(TileWalls[0]);
     }
 
     void CompressWalls(int diceRoll, Player mano)
@@ -313,40 +226,70 @@ public class GameManager : MonoBehaviour
 
         int index = wallIndex + tileIndex + 1;
 
-        /*List<GameObject> leftHalf = new List<GameObject> (TileSet.GetRange(0, index));
-        List<GameObject> rightHalf = new List<GameObject> (TileSet.GetRange(index, 80 - index));
+        TileWalls.AddRange(TileSet[0..index].Reverse());
+        TileWalls.AddRange(TileSet[index..(80)].Reverse());
+    }
 
-        leftHalf.Reverse();
-        rightHalf.reverse();*/
+    public static void StackFlower(int flowerCount = 0) // remove flowercount
+    {
+        GameObject nextTile = TileWalls[TileWalls.Count - 2 - flowerCount];
+        GameObject thisTile = TileWalls[TileWalls.Count - 1 - flowerCount];
 
-        TileWalls.AddRange(TileSet.GetRange(0, index).Reverse<GameObject>().ToList());
-        TileWalls.AddRange(TileSet.GetRange(index, 80 - index).Reverse<GameObject>().ToList());
+        Vector3 position = nextTile.transform.position + new Vector3(0, tileSize.z, 0);
+        Quaternion rotation = thisTile.transform.rotation;
+        thisTile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.RightArrow) && currentTurnRunning != true)
+        // put this back
+        // it's better if player will just press next arrow before next player grab tile
+        // so that there's control on pong, eat
+
+        /*if (Input.GetKeyDown(KeyCode.RightArrow) && currentTurnRunning != true)
         {
             currentPlayer = Players[(Array.IndexOf(Players, currentPlayer) + 1) % 4];
-            StartCoroutine(NextTurn());
-        }
+            // StartCoroutine(NextTurn());
+            NextTurn();
+        }*/
     }
 
 }
 
+public static class Positioner // convert to monobehavior and merge w tosstile
+{
+    public const int Stand = 180;
+    public const int FaceUp = 270;
+    public const int FaceDown = 90;
+
+    public static IEnumerator<Vector3> DistributeRow(int tileCount, float perimSize, bool upright = true)
+    {
+        float centerOffset = GameManager.tileOffset.x - (tileCount * GameManager.tileSize.x) / 2;
+        float perimOffset = -GameManager.tileOffset.y - perimSize;
+        float liftOffset = (upright) ? (GameManager.tileOffset.y) : (GameManager.tileOffset.z);
+
+        Vector3 position = new Vector3(centerOffset, liftOffset, perimOffset);
+        Vector3 spacing = new Vector3(GameManager.tileSize.x, 0, 0);
+
+        for (int i = 0; i < tileCount; i++)
+        {
+            yield return position + (spacing * i);
+        }
+    }
+}
+
+public static class Perimeter
+{
+    public const float BlockArea = 1.25f;
+    public const float WallArea = 2.24f;
+    public const float OpenArea = 2.75f;
+    public const float HandArea = 3.22f;
+}
+
+
+
 // create public class Tile that extends and inherits from GameObject
 // compress list_tilewalls[] to list_tilewalls
-
-/*
-enum FacePresets
-{
-    Stand,
-    Player,
-    Opened,
-    Closed,
-    Static
-}
-*/
 
 /*
 for two-sided preset

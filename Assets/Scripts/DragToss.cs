@@ -34,15 +34,15 @@ public class DragToss : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        Debug.Log("called");
         // Apply force when colliding with other objects
         foreach (ContactPoint contact in collision.contacts)
         {
             //Vector3 forceDirection = contact.point - transform.position;
             Vector3 forceDirection = new Vector3(collision.contacts[0].normal.x, 0, collision.contacts[0].normal.z).normalized;
-            Rigidbody collisionRB = collision.gameObject.GetComponent<Rigidbody>();
-            collisionRB.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationX;
-            collisionRB.AddForce(forceDirection * 0.1f, ForceMode.Impulse);
+            Rigidbody colRigidbody = collision.gameObject.GetComponent<Rigidbody>();
+
+            colRigidbody.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationX;
+            colRigidbody.AddForce(forceDirection * 0.1f, ForceMode.Impulse);
         }
     }
 }

@@ -172,6 +172,7 @@ public class SortTile : MonoBehaviour
                     targetTile = Hand[finalIndex];
                     Debug.Log(currentTile.name + " go to " + targetTile.name);
                 }*/
+
                 Hand.Insert(finalIndex, currentTile);
                 tileRanks.Insert(finalIndex, rank);
 

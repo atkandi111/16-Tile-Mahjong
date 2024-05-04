@@ -1,0 +1,231 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"}]}}
+
+#!csharp
+
+using System;
+using System.Linq;
+using System.Collections.Generic;
+
+// exclude flowers
+
+public static class Grouper
+{
+    public static List<string[]> GroupMelds()
+    {
+        return new List<string[]>();
+    }
+
+    private static IEnumerable<int[]> CombinationIndex(int m, int n)
+    {
+        int[] result = new int[m];
+        Stack<int> stack = new Stack<int>(m);
+        stack.Push(0);
+        while (stack.Count > 0)
+        {
+            int index = stack.Count - 1;
+            int value = stack.Pop();
+            while (value < n)
+            {
+                result[index++] = value++;
+                stack.Push(value);
+                if (index != m) 
+                { 
+                    continue;
+                }
+
+                yield return result;
+                break;
+            }
+        }
+    }
+
+    public static IEnumerable<List<string[]>> Combinations(List<string[]> hand, int m)
+    {
+        string[][] result = new string[m][];
+        if (m < 1)
+            yield return result.ToList();
+        else
+        {
+            foreach (int[] j in CombinationIndex(m, hand.Count))
+            {
+                for (int i = 0; i < m; i++)
+                {
+                    result[i] = hand[j[i]];
+                }
+                // yield return (int[]) result.Clone();
+                yield return result.ToList();
+            }
+        }
+    }
+}
+
+public static class Engine
+{
+    /*List<List<string>> MeldCombinations(List<string> hand)
+    {
+        return;
+    }*/
+    public static List<string> FindMeld(List<string> hand)
+    {
+        Dictionary<string, int> handFrequency = hand
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Dictionary<string, float> meldFrequency = hand
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, _ => 0f);
+
+        List<string[]> melds = new List<string[]>();
+        foreach (string tile in handFrequency.Keys)
+        {
+            /*
+            if (handFrequency[tile] > 1)
+                melds.Add(new string[] {tile, tile});
+            */
+
+            if (handFrequency[tile] > 2) 
+                melds.Add(new string[] {tile, tile, tile});
+            
+            if (char.IsLetter(tile[1])) 
+                continue;
+
+            char suit = tile[0];
+            int unit = tile[1] - '0';
+            
+            string[] chow = new string[] {
+                $"{suit}{unit}", 
+                $"{suit}{unit + 1}", 
+                $"{suit}{unit + 2}"
+            };
+
+            if (chow.All(item => handFrequency.ContainsKey(item)))
+            {
+                for (int i = 0; i < chow.Min(tile => handFrequency[tile]); i++)
+                {
+                    melds.Add(chow);
+                }
+            }
+        }
+        
+        for (int meldCount = hand.Count / 3; meldCount >= 0; meldCount--)
+        {
+            // DCMP = decompositon
+            var combinations = Grouper.Combinations(melds, meldCount);
+            foreach (List<string[]> meldDCMP in combinations)
+            {
+
+                /*foreach (string[] meld in meldDCMP)
+                {
+                    Console.Write("[ ");
+                    foreach (string tile in meld)
+                    {
+                        Console.Write(tile);
+                        Console.Write(" ");
+                    }
+                    Console.Write("]");
+                }
+                Console.WriteLine();*/
+
+                Dictionary<string, int> dcmpFrequency = meldDCMP
+                    .SelectMany(array => array)
+                    .GroupBy(tile => tile)
+                    .ToDictionary(group => group.Key, group => group.Count());
+
+                bool invalidDCMP = dcmpFrequency.Any(tile => tile.Value > handFrequency[tile.Key]);
+                if (invalidDCMP)
+                    continue;
+
+                foreach (var tile in dcmpFrequency)
+                {
+                    if (meldFrequency.ContainsKey(tile.Key))
+                    {
+                        meldFrequency[tile.Key] += tile.Value;
+                    }
+                    else
+                    {
+                        meldFrequency[tile.Key] = tile.Value;
+                    }
+                }
+
+                meldCount = -1;
+            }
+        }
+
+        /*
+        List<string> shortlist = new List<string>();
+        foreach (string tile in meldFrequency.Keys)
+        {
+            for (int i = 0; i < meldFrequency[tile]; i++)
+            {
+                shortlist.Add(tile);
+            }
+        }
+        */
+
+        // meldFrequency is the number of melds lost if the tile is discarded //
+        int maxCounter = 0;
+        foreach (string tile in meldFrequency.Keys)
+        {
+            meldFrequency[tile] = (int) Math.Round((double) meldFrequency[tile] / handFrequency[tile], 2);
+            if (maxCounter < meldFrequency[tile])
+            {
+                maxCounter = (int) meldFrequency[tile];
+            }
+            Console.WriteLine(tile + " - " + meldFrequency[tile]);
+        }
+
+        List<string> shortlist = new List<string>();
+        foreach (string tile in meldFrequency.Keys)
+        {
+            for (int i = 0; i < handFrequency[tile]; i++)
+            {
+                if ((i + 1) * meldFrequency[tile] >= maxCounter)
+                    break;
+
+                shortlist.Add(tile);
+            }
+        }
+
+        foreach (string i in shortlist)
+        {
+            Console.Write(i);
+            Console.Write(" ");
+        }
+        return shortlist;
+
+    }
+
+    static List<string> FindNeed()
+    {
+        return new List<string>();
+    }
+
+    static List<string> FindNear()
+    {
+        return new List<string>();
+    }
+}
+
+// "b1", "b2", "b2", "b2", "b3", "b3", "b4", "b4", "b8", "b9" //
+Engine.FindMeld(new List<string>()
+{
+    "b1", "b1", "b1", 
+    "b2", "b2", "b2", 
+    "b3", "b3", "b3",
+    "b4", "b4", "b4",
+    "b5", "b5", "b5",
+    "b6", "b6"
+});
+
+#!csharp
+
+// '1234'
+
+List<List<int> tiles = new List<int>() {1, 2, 3, 4};
+
+foreach (int num in tiles)
+{
+    if (num)
+}

@@ -1,0 +1,31 @@
+// Create Prefabs (if not existing) 
+
+Material tileCrack = (Material) Resources.Load("Tile Crack");
+Material tileBack = (Material) Resources.Load("Tile Back");
+foreach (GameObject tile in TileSet)
+{
+    string imagePath = tile.name;
+    if (imagePath[0] != 'f')
+    {
+        imagePath = imagePath.Substring(0, 2);
+    }
+    
+    Material tileFace = (Material) Resources.Load("Albedo Map/Materials/" + imagePath);
+    Texture2D tileBump = (Texture2D) Resources.Load("Height Map/" + imagePath);
+    GameObject prefabInstance = Instantiate(Resources.Load("TileVariant")) as GameObject;
+    Renderer prefabRenderer = prefabInstance.GetComponent<Renderer>();
+
+    Material[] materials = prefabRenderer.materials;
+    materials[0] = tileFace;
+    materials[0].SetTexture("_BumpMap", tileBump);
+    materials[0].SetTextureScale("_MainTex", new Vector2(1.2f, 1f));
+    materials[0].SetTextureOffset("_MainTex", new Vector2(0f, 0f));
+
+    materials[1] = tileCrack;
+    materials[2] = tileBack;
+    prefabRenderer.materials = materials;
+    PrefabUtility.SaveAsPrefabAsset(prefabInstance, String.Format("Assets/Objects/Resources/{0}.prefab", imagePath));
+    Destroy(prefabInstance);
+} 
+
+// to be added in GameManager Awake()
