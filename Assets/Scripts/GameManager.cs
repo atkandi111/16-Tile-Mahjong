@@ -14,9 +14,10 @@ using Vector3 = UnityEngine.Vector3;
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
 
-public class GameManager : MonoBehaviour
+public class GameManager : MonoBehaviour // convert to singleton
 {
     public static Player[] Players = new Player[4];
+    public static string[] TileNames;
     public static GameObject[] TileSet = new GameObject[144]; // convert to private
     public static List<GameObject> TileWalls = new List<GameObject>();
     public static List<GameObject> TileToss = new List<GameObject>();
@@ -24,24 +25,23 @@ public class GameManager : MonoBehaviour
     public static Vector3 tileSize, tileOffset;
 
     public static Player currentPlayer;
-    private Player mano;
-    private int diceRoll;
+    private int mano, diceRoll;
 
     void Awake()
     {   
         /* Create TileSet */
-        string[] names = 
+        TileNames = new string[]
         {
             "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
             "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
             "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
-            "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB"
+            "tN", "tS", "tW", "tE", "tG", "tR", "tP", "fR", "fB"
         };
 
         GameObject temp;
         for (int i = 0; i < 144; i++)
         {
-            string tileName = names[i / 4];
+            string tileName = TileNames[i / 4];
             int tileID = (i % 4) + 1;
             if (tileName.Contains('f'))
             {
@@ -78,6 +78,11 @@ public class GameManager : MonoBehaviour
         /* Create Players */
         GameObject table = GameObject.Find("Table Perimeter");
 
+        /*Players[0] = new Player(0);
+        Players[1] = new Player(1);
+        Players[2] = new Player(2);
+        Players[3] = new Player(3);*/
+
         Players[0] = table.AddComponent<Human>();
         Players[1] = table.AddComponent<Bot>();
         Players[2] = table.AddComponent<Bot>();
@@ -88,7 +93,9 @@ public class GameManager : MonoBehaviour
         Players[2].playerID = 2;
         Players[3].playerID = 3;
 
-        mano = Players[0];
+        mano = 0;
+        table.AddComponent<DragToss>();
+        Camera.main.GetComponent<KeyboardListener>().enabled = false;
     }
     
     void Start()
@@ -98,6 +105,12 @@ public class GameManager : MonoBehaviour
 
     void NewRound()
     {        
+        /* Initialize Engine KnowledgeBase */
+        foreach (Player p in Players)
+        {
+            p.engine.knowledgeBase = TileNames.ToDictionary(name => name, _ => 4);
+        }
+
         /* Shuffle TileSet using Fisher-Yates */
         Random random = new Random();
         for (int i = TileSet.Length - 1; i > 0; i--)
@@ -107,6 +120,8 @@ public class GameManager : MonoBehaviour
             TileSet[i] = TileSet[j];
             TileSet[j] = temp;
         }
+
+        TileSet = TestRearrange(TileSet, "tN");
 
         // declare diceroll here
 
@@ -164,7 +179,7 @@ public class GameManager : MonoBehaviour
     }
     IEnumerator SetupTiles()
     { 
-        currentPlayer = mano;
+        currentPlayer = Players[mano];
         diceRoll = 12;
         CompressWalls(diceRoll, mano);
 
@@ -208,20 +223,153 @@ public class GameManager : MonoBehaviour
             }
         }
 
-
-        currentPlayer.GrabTile(TileWalls[0]);
+        // yield return
         StackFlower();
+        // yield return new WaitForSeconds(0.5f);
+
+        currentPlayer.GrabTile(TileWalls[0]);
+        yield return new WaitForSeconds(0.5f);
+
+        StartCoroutine(InitialFlowerRound());
+        // call AnalyzeHand for each Player
     }
 
-    public static void NextTurn()
+    public IEnumerator InitialFlowerRound()
     {
-        currentPlayer = Players[(Array.IndexOf(Players, currentPlayer) + 1) % 4];
+        List<GameObject>[] initialFlowers = new List<GameObject>[4];
+        
+        do 
+        { 
+            for (int i = mano; i < mano + 4; i++)
+            {
+                initialFlowers[i % 4] = Players[i % 4].Hand
+                    .Where(tile => tile.name.StartsWith("f"))
+                    .ToList();
+
+                if (initialFlowers[i % 4].Count > 0)
+                {
+                    Players[i % 4].OpenTile(initialFlowers[i % 4]);
+                    yield return new WaitForSeconds(0.7f); // 0.3 * 2 + 0.1 (allowance)
+                }
+            }
+        } while (initialFlowers.Any(flwrList => flwrList.Count > 0));
+
+        foreach (Player player in Players)
+        {
+            player.engine.ChooseDiscard(); // change to analyze hand
+        }
+    }
+
+    public static IEnumerator PreTossBuffer()
+    {
+        // player grabs tile
+        // will current player flower?
+        // will current player kang?
+        // add keyboardlistener request WAIT, to wait for 5 more seconds
+        // player chooses toss
+        yield return null;
+    }
+    public static IEnumerator PostTossBuffer(GameObject tile)
+    {
+        float elapsedTime = 0f, decisionTime = 3f;
+
+        Camera.main.GetComponent<KeyboardListener>().enabled = true;
+        while (elapsedTime < decisionTime && !Input.GetKeyDown(KeyCode.RightArrow))
+        {
+            elapsedTime += Time.deltaTime;
+            yield return null;
+
+            // change to yield return WaitForSeconds
+        }
+        Camera.main.GetComponent<KeyboardListener>().enabled = false;
+
+        for (int i = 0; i < 4; i++)
+        {
+            MeldText.Instance.Hide(i);
+        }
+
+        // measure time performance
+        int currentIndex = Array.IndexOf(Players, currentPlayer);
+        for (int i = currentIndex + 1; i < currentIndex + 4; i++)
+        {
+            if (Players[i % 4].WillWin(tile))
+            {
+                PlayerLight.Instance.UpdateLight(i % 4);
+                currentPlayer = Players[i % 4];
+                yield break;
+            }
+        }
+
+        for (int i = currentIndex + 1; i < currentIndex + 4; i++)
+        {
+            if (Players[i % 4].WillKang(tile))
+            {
+                AudioManager.Instance.playKang();
+                PlayerLight.Instance.UpdateLight(i % 4);
+                MeldText.Instance.OnKang(i % 4);
+                currentPlayer = Players[i % 4];
+
+                List<GameObject> kangBlock = currentPlayer.Hand.Where(go => go.name == tile.name).ToList();
+                kangBlock.Add(tile);
+                TileToss.Remove(tile);
+
+                currentPlayer.OpenTile(kangBlock);
+                // currentPlayer.ChooseDiscard();
+                yield break;
+            }
+
+            if (Players[i % 4].WillPong(tile))
+            {
+                AudioManager.Instance.playPong();
+                PlayerLight.Instance.UpdateLight(i % 4);
+                MeldText.Instance.OnPong(i % 4);
+                currentPlayer = Players[i % 4];
+
+                List<GameObject> pongBlock = currentPlayer.Hand.Where(go => go.name == tile.name).ToList();
+                pongBlock.Add(tile);
+                TileToss.Remove(tile);
+
+                currentPlayer.OpenTile(pongBlock);
+                if (currentPlayer != Players[0]) // transfer to bot's grab tile
+                    currentPlayer.ChooseDiscard();
+                yield break;
+            }
+        }
+
+        if (Players[(currentIndex + 1) % 4].WillChao(tile))
+        {
+            AudioManager.Instance.playChao();
+            PlayerLight.Instance.UpdateLight((currentIndex + 1) % 4);
+            MeldText.Instance.OnChao((currentIndex + 1) % 4);
+            currentPlayer = Players[(currentIndex + 1) % 4];
+
+            (string name1, string name2) = currentPlayer.engine.ChooseChao(tile.name);
+            GameObject tile1 = currentPlayer.Hand.First(go => go.name == name1);
+            GameObject tile2 = currentPlayer.Hand.First(go => go.name == name2);
+            List<GameObject> chaoBlock = new List<GameObject>() { tile, tile1, tile2 };
+            TileToss.Remove(tile);
+
+            currentPlayer.OpenTile(chaoBlock);
+            if (currentPlayer != Players[0])
+                currentPlayer.ChooseDiscard();
+            yield break;
+        }
+
+        NextTurn();
+    }
+
+    public static void NextTurn() // convert to coroutine
+    {
+        int currentIndex = (Array.IndexOf(Players, currentPlayer) + 1) % 4;
+
+        PlayerLight.Instance.UpdateLight( currentIndex );
+        currentPlayer = Players[currentIndex];
         currentPlayer.GrabTile(TileWalls[0]);
     }
 
-    void CompressWalls(int diceRoll, Player mano)
+    void CompressWalls(int diceRoll, int mano)
     {
-        int wallIndex = (Array.IndexOf(Players, mano) + (diceRoll % 4)) * 20;
+        int wallIndex = (mano + (diceRoll % 4)) * 20;
         int tileIndex = (20 - diceRoll);
 
         int index = wallIndex + tileIndex + 1;
@@ -230,15 +378,23 @@ public class GameManager : MonoBehaviour
         TileWalls.AddRange(TileSet[index..(80)].Reverse());
     }
 
-    public static void StackFlower(int flowerCount = 0) // remove flowercount
+    public static void StackFlower()
     {
-        GameObject nextTile = TileWalls[TileWalls.Count - 2 - flowerCount];
-        GameObject thisTile = TileWalls[TileWalls.Count - 1 - flowerCount];
+        GameObject nextTile = TileWalls[TileWalls.Count - 2];
+        GameObject thisTile = TileWalls[TileWalls.Count - 1];
 
         Vector3 position = nextTile.transform.position + new Vector3(0, tileSize.z, 0);
         Quaternion rotation = thisTile.transform.rotation;
         thisTile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
     }
+
+    /*public static void UpdateAllKB(string tile)
+    {
+        foreach (Player p in Players)
+        {
+            p.engine.UpdateKB(tile);
+        }
+    }*/
 
     void Update()
     {
@@ -252,6 +408,27 @@ public class GameManager : MonoBehaviour
             // StartCoroutine(NextTurn());
             NextTurn();
         }*/
+    }
+
+    GameObject[] TestRearrange(GameObject[] tiles, string targetName)
+    {
+        List<GameObject> tileList = new List<GameObject>(tiles);
+        List<GameObject> tileMover = new List<GameObject>();
+
+        for (int i = tileList.Count - 1; i >= 0; i--)
+        {
+            if (tileList[i].name == targetName)
+            {
+                tileMover.Insert(0, tileList[i]);
+                tileList.RemoveAt(i);
+            }
+        }
+
+        tileList.Insert(82, tileMover[0]);
+        tileList.Insert(82, tileMover[1]);
+        tileList.Insert(90, tileMover[2]);
+        tileList.Insert(109, tileMover[3]);
+        return tileList.ToArray();
     }
 
 }
@@ -301,3 +478,22 @@ because stepVector is positive, so that it's easier to left-align
 // instead of quadrant, use look at
 
 // replace TileManager with public class Tile
+
+
+// maybe findMeld is unnecessary
+
+// remove dragtoss when opening tile
+
+// BUG when dragging ponged tile as it is being taken
+
+
+// BUG when clicking right arrow when ponged tile is being taken
+
+// bake light on table perimeter and then just rotate tableperim
+
+// BUG when engine has a pair, breaks the pair, but doesn't realize that pair doesn't exist anymore
+// because engine still pongs the pair even after breaking it
+// because prePong and preChow are not updated after choosing a toss
+
+
+// convert currentplayer to int

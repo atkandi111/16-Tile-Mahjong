@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -12,38 +13,61 @@ public abstract class Player : MonoBehaviour
 {
     public List<GameObject> Hand = new List<GameObject>();
     public List<GameObject> Open = new List<GameObject>();
+    public Engine engine;
 
     public string playerName;
     public int playerID, coins = 0, wins = 0;
 
-
-    /*private string m_Value;
-
-    protected A(string value) {
-        m_Value = value;
-    }
-
-    public Vector3 viewpoint {
-        get { return Camera.main.transform.position - new Vector3(0, 2f, 0); }
-    }*/
-
-    //protected Quaternion quadrant;
-    //protected Vector3 viewpoint;
 
     // try private
     public abstract Quaternion quadrant { get; }
     public abstract Vector3 viewpoint { get; }
     public abstract float groundNegative { get; }
 
-    // public abstract IEnumerator SyncTurn(GameObject tile);
+    public bool WillWin(GameObject tile) { return false; }
+    public abstract bool WillChao(GameObject tile);
+    public abstract bool WillPong(GameObject tile);
+    public abstract bool WillKang(GameObject tile);
 
-    /*public Player(int playerID, string playerName)
+    public Player(int playerID = 0, string playerName = "")
     {
         this.playerID = playerID;
         this.playerName = playerName;
-    }*/
+        this.engine = new Engine(this); // transfer to bot
+    }
 
-    public virtual void DistributeHand()
+    public IEnumerator DelayAction(params Action[] postActions)
+    {
+        yield return new WaitForSeconds(0.3f);
+        foreach (var postAction in postActions)
+        {
+            postAction();
+        }
+    }
+
+
+    public void ChooseDiscard()
+    {
+        StartCoroutine(DelayAction(() => {
+            string discardName = this.engine.ChooseDiscard();
+
+            var _hand = Hand
+                .Select(tile => tile.name)
+                .OrderBy(name => name)
+                .ToList();
+
+            string handstr = "";
+            foreach (string name in _hand)
+            {
+                handstr += name + " ";
+            }
+            Debug.Log(handstr + "-> " + discardName);
+
+            GameObject discard = Hand.First(tile => tile.name == discardName);
+            TossTile(discard);
+        }));
+    }
+    public void DistributeHand()
     {
         IEnumerator<Vector3> row = Positioner.DistributeRow(Hand.Count, Perimeter.HandArea);
         foreach (GameObject tile in Hand)
@@ -55,52 +79,8 @@ public abstract class Player : MonoBehaviour
             tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
         }
     }
-    public IEnumerator GrabFlower(List<GameObject> tiles) // GameObject tile (single)
+    public void DistributeOpen()
     {
-        foreach (GameObject tile in tiles)
-        {
-            while (tile.GetComponent<TileManager>().enabled)
-            {
-                yield return null;
-            }
-        }
-
-        OpenTile(tiles);
-        GrabTile(GameManager.TileWalls.GetRange(GameManager.TileWalls.Count - tiles.Count, tiles.Count));
-
-        GameManager.StackFlower();
-
-    }
-    public virtual void GrabTile(GameObject tile)
-    {
-        GrabTile(new List<GameObject> { tile });
-    }
-
-    public virtual void GrabTile(List<GameObject> tiles)
-    {
-        Hand.AddRange(tiles);
-        GameManager.TileWalls.RemoveAll(tiles.Contains);
-        foreach (GameObject tile in tiles)
-        {
-            Quaternion xRot = Quaternion.LookRotation(viewpoint);
-            Quaternion zRot = Quaternion.Euler(0, 0, new Random().Next(2) * 180);
-
-            // transfer to Human
-            tile.GetComponent<DragTile>().baseRotation = xRot * zRot;
-        }
-
-        DistributeHand();
-    }
-    public virtual void OpenTile(GameObject tile)
-    {
-        OpenTile(new List<GameObject> { tile });
-    }
-
-    public virtual void OpenTile(List<GameObject> tiles)
-    {
-        Open.AddRange(tiles);
-        Hand.RemoveAll(tiles.Contains);
-
         IEnumerator<Vector3> row = Positioner.DistributeRow(Open.Count, Perimeter.OpenArea, upright: false);
         foreach (GameObject tile in Open)
         {
@@ -110,27 +90,104 @@ public abstract class Player : MonoBehaviour
             
             tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
         }
+    }
 
+    public virtual void GrabTile(GameObject tile) => GrabTile(new List<GameObject> { tile });
+    public virtual void GrabTile(List<GameObject> tiles)
+    {
+        Hand.AddRange(tiles);
+        GameManager.TileWalls.RemoveAll(tiles.Contains);
+        foreach (GameObject tile in tiles)
+        {
+            this.engine.UpdateKB(tile.name);
+        }
+
+        foreach (GameObject tile in tiles)
+        {
+            Quaternion xRot = Quaternion.LookRotation(viewpoint);
+            Quaternion zRot = Quaternion.Euler(0, 0, new Random().Next(2) * 180);
+
+            // transfer to Human
+            tile.GetComponent<DragTile>().baseRotation = xRot * zRot;
+        }
+
+        AudioManager.Instance.soundMovement();
         DistributeHand();
     }
 
-    public virtual void KangTile()
+    public virtual void OpenTile(GameObject tile) => OpenTile(new List<GameObject> { tile });
+    public virtual void OpenTile(List<GameObject> tiles)
     {
+        var newlyOpenedTiles = Hand.Where(obj1 => tiles.Contains(obj1, EqualityComparer<GameObject>.Default));
 
+        Open.AddRange(tiles);
+        Hand.RemoveAll(tiles.Contains);
+
+        foreach (GameObject tile in newlyOpenedTiles)
+        {
+            foreach (Player p in GameManager.Players)
+            {
+                if (p == this)
+                    continue;
+                
+                p.engine.UpdateKB(tile.name);
+            }
+        }
+        foreach (GameObject tile in tiles) // opposite of newlyOpenedTiles
+        {
+            tile.GetComponent<BoxCollider>().isTrigger = true;
+        }
+
+        DistributeOpen();
+        DistributeHand();
+        StartCoroutine(DelayAction(() => 
+        {
+            string name = tiles[0].name;
+            int flowerCount = tiles.Count(tile => tile.name.StartsWith("f"));
+            if (flowerCount > 0)
+            {
+                GrabTile(GameManager.TileWalls.GetRange(GameManager.TileWalls.Count - flowerCount, flowerCount));
+                GameManager.StackFlower();
+            }
+            else if (tiles.Count == 4 && tiles.All(tile => tile.name == name))
+            {
+                GrabTile(GameManager.TileWalls.Last());
+                GameManager.StackFlower();
+            }
+            else if (Open.Count(tile => tile.name == name) == 4)
+            {
+                GrabTile(GameManager.TileWalls.Last());
+                GameManager.StackFlower();
+            }
+        }));
     }
-
     public virtual void TossTile(GameObject tile)
     {
         Hand.Remove(tile);
-        (Vector3 position, Quaternion rotation) = TossTiler.ComputeTossPosition();
         GameManager.TileToss.Add(tile);
+        foreach (Player p in GameManager.Players)
+        {
+            if (p == this) // p == this
+                continue;
+            
+            p.engine.UpdateKB(tile.name);
+        }
 
+        (Vector3 position, Quaternion rotation) = TossTiler.ComputeTossPosition();
         tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
+        
         DistributeHand();
-
+        // StartCoroutine(DelayAction(() => {
         tile.GetComponent<BoxCollider>().isTrigger = false;
-        tile.AddComponent<DragToss>();
-    }
+        tile.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationX;
+        // tile.AddComponent<DragToss>();
+
+        // tile.GetComponent<Rigidbody>().collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+        StartCoroutine(GameManager.PostTossBuffer(tile));
+            //StartCoroutine(TossBuffer());
+        // }));
+    }   
 }
 
 public class Human : Player
@@ -147,61 +204,84 @@ public class Human : Player
         get { return Camera.main.transform.position - new Vector3(0, 2f - groundNegative, - Perimeter.HandArea); }
     }
 
-    public IEnumerator SyncTurn(GameObject tile) // transfer to grabtile
-    {
-        // use unityevents to subscribe NextTurn to TileManager.completion instead
-        while (tile.GetComponent<TileManager>().enabled)
-        {
-            yield return null;
-        }
-
-        GameManager.NextTurn();
-    }
-
     public override void GrabTile(List<GameObject> tiles)
     {
         base.GrabTile(tiles);
+
         foreach (GameObject tile in tiles)
         {
             tile.GetComponent<DragTile>().enabled = true;
         }
+        Camera.main.GetComponent<KeyboardListener>().enabled = true;
     }
-    
+
     public override void OpenTile(List<GameObject> tiles)
     {
         base.OpenTile(tiles);
+
+        // move to inner func
         foreach (GameObject tile in tiles)
         {
             tile.GetComponent<DragTile>().enabled = false;
-        }
-    }
-
-    public override void OpenTile(GameObject tile)
-    {
-        if (tile.name.StartsWith("f"))
-        {
-            StartCoroutine(GrabFlower(new List<GameObject>() { tile }));
         }
     }
     
-    /*
-    public override void KangTile(List<GameObject> tiles)
-    {
-        foreach (GameObject tile in tiles)
-        {
-            tile.GetComponent<DragTile>().enabled = false;
-        }
-        base.OpenTile(tiles);
-    }
-    */
     public override void TossTile(GameObject tile)
     {
-        tile.GetComponent<DragTile>().enabled = false;
         base.TossTile(tile);
 
-        StartCoroutine(SyncTurn(tile));
+        tile.GetComponent<DragTile>().enabled = false;
+        Camera.main.GetComponent<KeyboardListener>().enabled = false;
     }
 
+    public override bool WillChao(GameObject tile)
+    {
+        if (KeyboardListener.chaoRequested == false)
+            return false;
+        
+        KeyboardListener.chaoRequested = false;
+
+        char suit = tile.name[0];
+        int unit = tile.name[1] - '0';
+
+        string[] seqn = new string[] {
+            suit + (unit - 2).ToString(),
+            suit + (unit - 1).ToString(),
+            suit + (unit + 1).ToString(),
+            suit + (unit + 2).ToString(),
+        };
+
+        if (Hand.Any(_tile => _tile.name == seqn[0]) && Hand.Any(_tile => _tile.name == seqn[1]))
+            return true;
+        
+        if (Hand.Any(_tile => _tile.name == seqn[1]) && Hand.Any(_tile => _tile.name == seqn[2]))
+            return true;
+        
+        if (Hand.Any(_tile => _tile.name == seqn[2]) && Hand.Any(_tile => _tile.name == seqn[3]))
+            return true;
+
+        return false;
+    }
+
+    public override bool WillPong(GameObject tile)
+    {
+        if (KeyboardListener.pongRequested == false)
+            return false;
+
+        KeyboardListener.pongRequested = false;
+
+        return Hand.Count(_tile => _tile.name == tile.name) >= 2;
+    }
+
+    public override bool WillKang(GameObject tile)
+    {
+        if (KeyboardListener.kangRequested == false)
+            return false;
+        
+        KeyboardListener.kangRequested = false;
+
+        return Hand.Count(_tile => _tile.name == tile.name) == 3;
+    }
 }
 
 public class Bot : Player
@@ -218,71 +298,76 @@ public class Bot : Player
     { 
         get { return quadrant * new Vector3(0, 0, -1); }
     }
-
-    public IEnumerator SyncTurn(List<GameObject> tiles)
-    {
-        // Choose Discard //
-        foreach (GameObject tile in tiles)
-        {
-            while (tile.GetComponent<TileManager>().enabled)
-            {
-                yield return null;
-            }
-        }
-
-        string discardName = Engine.ChooseDiscard(
-            Hand.Select(tile => tile.name).ToList()
-        );
-
-        GameObject discard = Hand.First(tile => tile.name == discardName);
-        TossTile(discard);
-
-        // Delay Throw //
-        while (discard.GetComponent<TileManager>().enabled)
-        {
-            yield return null;
-        }
-
-        float elapsedTime = 0f, decisionTime = 3f;
-        while (elapsedTime < decisionTime && !Input.GetKeyDown(KeyCode.RightArrow))
-        {
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
-
-        GameManager.NextTurn();
-    }
     public override void GrabTile(List<GameObject> tiles)
     {
         base.GrabTile(tiles);
-        
-        List<GameObject> flowers = tiles
-            .Where(tile => tile.name.StartsWith("f"))
-            .ToList();
 
-        if (flowers.Count > 0)
+        /*if (tiles.Count > 1)
         {
-            StartCoroutine(GrabFlower(flowers));
-        }
-        else
+            return;
+        }*/
+        StartCoroutine(DelayAction(() => 
         {
-            if (GameManager.currentPlayer == this)
+            int flowerCount = tiles.Count(tile => tile.name.StartsWith("f"));
+            if (flowerCount > 0 && GameManager.currentPlayer == this)
             {
-                StartCoroutine(SyncTurn(tiles));
+                OpenTile(tiles.Where(tile => tile.name.StartsWith("f")).ToList());
+                GameManager.StackFlower();
             }
-        }
+            /*if (tiles[0].name.StartsWith("f"))
+            {
+                OpenTile(tiles[0]);
+            }*/
+            else if (tiles.Count == 1 && GameManager.currentPlayer == this)
+            {
+                ChooseDiscard();
+            }
+        }));
     }
 
-
+    public override bool WillChao(GameObject tile)
+    {
+        return this.engine.WillChao(tile.name);
+    }
+    public override bool WillPong(GameObject tile)
+    {
+        return this.engine.WillPong(tile.name);
+    }
+    public override bool WillKang(GameObject tile)
+    {
+        return this.engine.WillKang(tile.name);
+    }
 }
 
 
 // include open flower in sort
-
+// auto sort function
 
 // rename human, bot to controller, opponent
 
-
-// syncturn WaitFor should be in Grab, Open, and Toss methods instead
-// prevent openFlower if not current turn
 // press on tileWall before grabbing for Human Player
+
+
+// change kangtile to chowtile
+// find out where dragtile is enabled
+// convert GrabFlower to IEnumerator
+
+// for callback functions, to overcome bug where OnDisable happens before EventHandler gets asigned in the first place
+// do: add cond in if statement: if (tile.enabled == true) {assign Handler}, else {execute Handler}
+
+// FIINAL: MAYBE USE ASYNC, if not then coroutines, and use WaitForSeconds
+
+// using async for I/O calls
+        // TRY: remove auto get flower in bot's grab tile
+
+
+// transfer anon coroutine to DistributeHand _end
+
+// change update to async in DragTile
+
+// separate tosstile for opening a chow
+
+
+// bug if playerA throws playerB's pong
+// if playerA picks up that same tile later, negative KB
+// because OpenTiles redundantly updates playerA after TossTiles

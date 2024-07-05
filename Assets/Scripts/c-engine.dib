@@ -67,13 +67,27 @@ public static class Engine
     {
         return;
     }*/
-    public static List<string> FindMeld(List<string> hand)
+    static List<string> prePong = new List<string>();
+    static Dictionary<string, List<(string, string)>> preChow = new Dictionary<string, List<(string, string)>>();
+    static Dictionary<string, int> knowledgeBase;
+
+    public static string ChooseThrow(List<string> candidates)
     {
-        Dictionary<string, int> handFrequency = hand
+        // rename Frequency to Count
+        candidates = FindMeld(candidates);
+        candidates = FindNeed(candidates);
+        candidates = FindNear(candidates);
+
+        return candidates[0];
+    }  
+
+    public static List<string> FindMeld(List<string> candidates)
+    {
+        Dictionary<string, int> handFrequency = candidates
             .GroupBy(tile => tile)
             .ToDictionary(group => group.Key, group => group.Count());
 
-        Dictionary<string, float> meldFrequency = hand
+        Dictionary<string, float> meldFrequency = candidates
             .GroupBy(tile => tile)
             .ToDictionary(group => group.Key, _ => 0f);
 
@@ -109,7 +123,7 @@ public static class Engine
             }
         }
         
-        for (int meldCount = hand.Count / 3; meldCount >= 0; meldCount--)
+        for (int meldCount = candidates.Count / 3; meldCount >= 0; meldCount--)
         {
             // DCMP = decompositon
             var combinations = Grouper.Combinations(melds, meldCount);
@@ -188,36 +202,376 @@ public static class Engine
             }
         }
 
-        foreach (string i in shortlist)
+        /*foreach (string i in shortlist)
         {
             Console.Write(i);
             Console.Write(" ");
-        }
+        }*/
         return shortlist;
 
     }
 
-    static List<string> FindNeed()
+    public static List<string> FindNeed(List<string> candidates)
     {
-        return new List<string>();
+        Dictionary<string, int> handFrequency = candidates
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Dictionary<string, float> needFrequency = candidates
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, _ => 0f);
+
+        // key=need , val=tilesOnHand that cause need
+        // rename innerChow, outerChow and add prePong / preChow
+        var needDependencies = new Dictionary<string, (string, string)[]>();
+
+        foreach (string tile in handFrequency.Keys)
+        { 
+            if (handFrequency[tile] >= 2)
+            {
+                needFrequency[tile] += knowledgeBase[tile] * handFrequency[tile];
+                // adds weight (preference for kangable)
+
+                /*if (!prePong.ContainsKey(tile))
+                { 
+                    prePong.Add(tile);
+                }*/
+            }
+
+            if (char.IsNumber(tile[1]))
+            {
+                string suit = tile[0].ToString();
+                int unit = int.Parse(tile[1].ToString());
+                List<string> seqn = new List<string>()
+                { 
+                    suit + (unit - 1).ToString(),
+                    suit + (unit + 0).ToString(),
+                    suit + (unit + 1).ToString(),
+                    suit + (unit + 2).ToString()
+                };
+
+                if (handFrequency.ContainsKey(seqn[2])) // __ tB tC __ (outer chow)
+                {
+                    // available completor, make new func AvailableCompletors()
+                    float availableNeeds = 0;
+                    availableNeeds += knowledgeBase.ContainsKey(seqn[0]) ? knowledgeBase[seqn[0]] : default(float);
+                    availableNeeds += knowledgeBase.ContainsKey(seqn[3]) ? knowledgeBase[seqn[3]] : default(float);
+
+                    needFrequency[seqn[1]] += availableNeeds / handFrequency[seqn[1]];
+                    needFrequency[seqn[2]] += availableNeeds / handFrequency[seqn[2]];
+
+                    if (!preChow.ContainsKey(seqn[0]))
+                    { 
+                        preChow.Add(seqn[0], new List<(string, string)>()); 
+                    }
+                    if (!preChow.ContainsKey(seqn[3]))
+                    { 
+                        preChow.Add(seqn[3], new List<(string, string)>()); 
+                    }
+
+                    preChow[seqn[0]].Add((seqn[1], seqn[2]));
+                    preChow[seqn[3]].Add((seqn[1], seqn[2]));
+                }
+
+                if (handFrequency.ContainsKey(seqn[3])) // tB __ tD (inner chow)
+                {
+                    float availableNeeds = knowledgeBase.ContainsKey(seqn[2]) ? knowledgeBase[seqn[2]] : default(float);
+
+                    needFrequency[seqn[1]] += availableNeeds / handFrequency[seqn[1]];
+                    needFrequency[seqn[3]] += availableNeeds / handFrequency[seqn[3]];
+
+                    if (!preChow.ContainsKey(seqn[2]))
+                    { 
+                        preChow.Add(seqn[2], new List<(string, string)>()); 
+                    }
+
+                    preChow[seqn[2]].Add((seqn[1], seqn[3]));
+                }
+            }
+        }
+
+        float minCount = needFrequency.Values.Min();
+        return needFrequency
+            .Where(tile => tile.Value == minCount)
+            .Select(tile => tile.Key)
+            .ToList();
     }
 
-    static List<string> FindNear()
+    static List<string> FindNear(List<string> candidates)
     {
-        return new List<string>();
+        Dictionary<string, int> nearFrequency = candidates
+            .GroupBy(tile => tile)
+            .ToDictionary(group => group.Key, _ => 0);
+
+        foreach (string tile in candidates)
+        {
+            char suit = tile[0];
+            int unit = tile[1] - '0';
+
+            string[] near = new string[] {
+                $"{suit}{unit - 2}", 
+                $"{suit}{unit - 1}",
+                $"{suit}{unit + 0}", 
+                $"{suit}{unit + 1}", 
+                $"{suit}{unit + 2}"
+            };
+
+            if (knowledgeBase.ContainsKey(near[1]) && knowledgeBase[near[1]] > 0)
+            {
+                nearFrequency[tile] += knowledgeBase[near[0]] + knowledgeBase[near[1]];
+            }
+
+            if (knowledgeBase.ContainsKey(near[3]) && knowledgeBase[near[3]] > 0)
+            {
+                nearFrequency[tile] += knowledgeBase[near[3]] + knowledgeBase[near[4]];
+            }
+        }
+
+        int minCount = nearFrequency.Values.Min();
+        return nearFrequency
+            .Where(tile => tile.Value == minCount)
+            .Select(tile => tile.Key)
+            .ToList();
+    }
+
+    static bool ShouldChow(string tile)
+    {
+        return preChow.ContainsKey(tile);
+    }
+
+    static (string, string) Chow(string tile)
+    {
+        (string, string) minGroup = (null, null);
+        int minCount = int.MaxValue;
+
+        if (preChow.ContainsKey(tile))
+        {
+            foreach ((string, string) grp in preChow[tile])
+            {
+                (string tile1, string tile2) = grp;
+                int cmpCount = AvailableCompletors(tile1, tile2);
+
+                if (cmpCount < minCount)
+                {
+                    minCount = cmpCount;
+                    minGroup = grp;
+                }
+            }
+        }
+        
+        return minGroup;
+    }
+
+    static int AvailableCompletors(string tile1, string tile2)
+    {
+        char suit = tile1[0];
+
+        int unit1 = tile1[1] - '0';
+        int unit2 = tile2[1] - '0';
+
+        /* ------pong------ */
+        if (unit2 - unit1 == 0)
+        {
+            return knowledgeBase[tile1];
+        } 
+
+        /* ---outer-chow--- */
+        else if (unit2 - unit1 == 1)
+        {
+            string completor1 = suit.ToString() + (unit1 - 1).ToString();
+            string completor2 = suit.ToString() + (unit2 + 1).ToString(); 
+
+            int count1 = knowledgeBase.ContainsKey(completor1) ? knowledgeBase[completor1] : default(int);
+            int count2 = knowledgeBase.ContainsKey(completor2) ? knowledgeBase[completor2] : default(int);
+            return count1 + count2;           
+        }
+
+        /* ---inner-chow--- */
+        else if (unit2 - unit1 == 2) 
+        {
+            string completor = suit.ToString() + (unit1 + 1).ToString();
+            return knowledgeBase[completor];
+        }
+
+        // throw new ArgumentException
+
+        return 0;
     }
 }
 
 // "b1", "b2", "b2", "b2", "b3", "b3", "b4", "b4", "b8", "b9" //
-Engine.FindMeld(new List<string>()
+List<string> tiles = new List<string>()
 {
-    "b1", "b1", "b1", 
-    "b2", "b2", "b2", 
-    "b3", "b3", "b3",
-    "b4", "b4", "b4",
-    "b5", "b5", "b5",
-    "b6", "b6"
-});
+    "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
+    "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+    "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
+    "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB",
+    "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
+    "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+    "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
+    "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB",
+    "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
+    "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+    "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
+    "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB",
+    "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
+    "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
+    "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
+    "tN", "tS", "tW", "tE", "tG", "tR", "tW", "fR", "fB"
+};
+
+tiles = tiles.OrderBy(i => Guid.NewGuid()).ToList();
+
+List<string>[] hands = new List<string>[] {
+    new List<string>() {"b8", "b7", "s7", "c5", "c8", "s4", "b3", "s9", "c1", "b8", "b8", "b6"},
+    new List<string>() {"b7", "c1", "tE", "c3", "b5", "b4", "fR", "tW", "s2", "s3", "s8", "tG"},
+    new List<string>() {"s2", "tS", "fR", "tR", "s8", "tG", "b1", "s9", "s5", "tW", "b2", "b2"},
+    new List<string>() {"s5", "b1", "c3", "c4", "tN", "s3", "c1", "s5", "tW", "s4", "b7", "s3"},
+    new List<string>() {"s3", "b1", "tS", "b3", "c6", "tS", "s5", "b6", "c4", "c8", "b6", "tR"},
+    new List<string>() {"fB", "s9", "tR", "b2", "b5", "tE", "b2", "c9", "b5", "s1", "s1", "s3"},
+    new List<string>() {"b7", "c2", "tG", "s4", "s3", "c4", "b8", "b5", "b4", "tE", "b6", "fB"},
+    new List<string>() {"tN", "b5", "c1", "s5", "tW", "s7", "s6", "c9", "s9", "b4", "c1", "b2"},
+    new List<string>() {"s3", "tG", "c2", "c1", "s6", "b4", "s8", "s7", "s4", "c5", "c6", "b3"},
+    new List<string>() {"s2", "s6", "s1", "tR", "tR", "b4", "fB", "tN", "b8", "b1", "c5", "c9"},
+    new List<string>() {"s5", "c5", "b4", "b9", "b7", "c6", "c7", "tN", "c8", "c6", "b7", "tR"},
+    new List<string>() {"b1", "s3", "b4", "c6", "c2", "tS", "s9", "c9", "c1", "c4", "s9", "fB"},
+    new List<string>() {"c1", "c5", "tN", "c6", "tW", "s7", "c9", "c4", "c2", "s4", "c7", "c3"},
+    new List<string>() {"tG", "c7", "b1", "b2", "c3", "s8", "b3", "s3", "b1", "c2", "c6", "tW"},
+    new List<string>() {"s1", "b6", "b7", "tE", "b1", "b5", "fB", "c4", "b8", "c3", "c1", "b6"},
+    new List<string>() {"c5", "c6", "c8", "s4", "s1", "s2", "c7", "b1", "tE", "b1", "tS", "s6"},
+    new List<string>() {"s3", "b2", "b2", "b6", "b4", "fB", "s5", "s9", "c7", "tS", "b1", "s8"},
+    new List<string>() {"s2", "s9", "tE", "b3", "c3", "c3", "fR", "s9", "c8", "b1", "s6", "b9"},
+    new List<string>() {"s9", "b2", "c8", "b3", "tW", "s1", "b6", "s2", "b2", "c1", "tR", "c7"},
+    new List<string>() {"c6", "c7", "b9", "b3", "b7", "tR", "fR", "c7", "b3", "tG", "fR", "c1"},
+    new List<string>() {"c7", "tN", "s2", "tW", "b1", "c8", "tR", "b5", "c3", "c9", "c6", "s8"},
+    new List<string>() {"tW", "b4", "b2", "s6", "s2", "s1", "c8", "s5", "c6", "tW", "tW", "s6"},
+    new List<string>() {"s5", "c8", "fR", "c2", "s1", "tW", "s1", "c7", "b6", "b2", "c4", "s6"},
+    new List<string>() {"tW", "c6", "s4", "b8", "b5", "b8", "b9", "s1", "b8", "c9", "c7", "tN"},
+    new List<string>() {"s1", "c1", "s2", "s8", "tN", "s8", "tW", "tS", "s5", "b6", "s9", "b1"},
+    new List<string>() {"s8", "tS", "fR", "b6", "c6", "b5", "s7", "b8", "tN", "s6", "c3", "b5"},
+    new List<string>() {"s2", "b9", "tW", "s5", "c8", "c7", "tE", "tS", "c8", "b7", "s7", "fR"},
+    new List<string>() {"b1", "c8", "s3", "s9", "s2", "s5", "b9", "s2", "c8", "b5", "b9", "tR"},
+    new List<string>() {"b5", "b6", "b5", "c8", "b4", "s7", "s5", "tW", "s1", "s4", "b9", "c3"},
+    new List<string>() {"tE", "s7", "tR", "tR", "c9", "s5", "b9", "b2", "s6", "c4", "c7", "b1"},
+    new List<string>() {"b2", "c8", "b9", "c2", "s7", "c7", "tR", "c8", "c6", "b6", "c3", "s8"},
+    new List<string>() {"s6", "b4", "c2", "s9", "tR", "s3", "c8", "c5", "b6", "tG", "tN", "c1"},
+    new List<string>() {"c6", "c4", "c2", "s7", "b9", "b6", "tS", "b9", "tW", "tS", "c5", "s2"},
+    new List<string>() {"s1", "c1", "c7", "b4", "tG", "tS", "tG", "s1", "tE", "b5", "b2", "s3"},
+    new List<string>() {"c1", "tW", "tS", "b5", "b9", "b2", "fR", "fB", "c8", "s6", "tR", "tE"},
+    new List<string>() {"tG", "s3", "s5", "s7", "s8", "b6", "s8", "b3", "s4", "tR", "s4", "b5"},
+    new List<string>() {"tW", "c3", "tR", "b7", "tS", "s4", "fR", "b3", "s2", "b9", "c2", "tN"},
+    new List<string>() {"s4", "fR", "b9", "c9", "s1", "s8", "tR", "s3", "s7", "c1", "tR", "s3"},
+    new List<string>() {"b1", "b7", "c7", "b8", "b9", "s7", "s4", "s6", "s1", "c8", "tR", "c2"},
+    new List<string>() {"b2", "b5", "b2", "c7", "s4", "b6", "tW", "s5", "b8", "s4", "c2", "b7"},
+    new List<string>() {"b5", "s6", "b1", "b3", "b7", "c3", "b2", "c6", "tS", "tW", "c8", "s8"},
+    new List<string>() {"tN", "c2", "c2", "c2", "b1", "tW", "s6", "b1", "b8", "tE", "b8", "tR"},
+    new List<string>() {"b3", "tN", "c6", "s9", "tW", "b6", "s7", "c3", "tG", "s9", "tN", "s2"},
+    new List<string>() {"c4", "tG", "b6", "s5", "c2", "b5", "tR", "c5", "s3", "s1", "c8", "s3"},
+    new List<string>() {"c9", "b7", "tE", "fB", "c5", "b8", "s7", "tG", "tW", "tE", "tW", "s7"},
+    new List<string>() {"tW", "b3", "c7", "b9", "b2", "tR", "b4", "tS", "b6", "b2", "b8", "b9"},
+    new List<string>() {"tR", "tG", "s1", "c5", "tE", "s3", "b4", "c2", "s4", "c1", "fR", "tR"},
+    new List<string>() {"c8", "s4", "c3", "c4", "c6", "tW", "b3", "c8", "s9", "s1", "s1", "c5"},
+    new List<string>() {"b4", "b1", "s8", "c9", "s1", "b5", "c8", "tG", "s5", "fB", "c8", "s3"},
+    new List<string>() {"b5", "b6", "tG", "fR", "tN", "b4", "b4", "b9", "tN", "c4", "b9", "b3"},
+    new List<string>() {"c3", "s4", "s1", "fR", "fR", "b6", "s3", "s2", "s4", "s9", "s5", "s5"},
+    new List<string>() {"s7", "s8", "c2", "s1", "b9", "s7", "c2", "fB", "b4", "c7", "fR", "s2"},
+    new List<string>() {"b5", "b1", "c6", "c3", "s2", "s9", "c2", "c8", "s7", "c7", "b3", "s9"},
+    new List<string>() {"tW", "tS", "c1", "tE", "c3", "tE", "s1", "b1", "b5", "b9", "c3", "c4"},
+    new List<string>() {"b9", "c9", "s9", "c4", "b7", "fB", "b8", "b1", "c7", "b2", "s2", "s5"},
+    new List<string>() {"tW", "s7", "c1", "c8", "c5", "b7", "s6", "s7", "b3", "tN", "c1", "tW"},
+    new List<string>() {"s2", "s3", "s2", "c2", "s8", "b6", "s8", "tG", "b9", "b4", "c2", "fB"},
+    new List<string>() {"c6", "c6", "s7", "c4", "c7", "b4", "s1", "c2", "tR", "tG", "tS", "s8"},
+    new List<string>() {"s1", "c5", "tN", "b5", "c1", "tE", "s3", "b5", "tS", "b8", "s8", "fB"},
+    new List<string>() {"b3", "c1", "s6", "tW", "tN", "tW", "c8", "c8", "c3", "s6", "s6", "c6"},
+    new List<string>() {"tE", "b1", "b5", "s3", "s2", "c2", "c6", "b9", "c4", "s3", "c5", "tE"},
+    new List<string>() {"s2", "tN", "b8", "b4", "tW", "tW", "tN", "s7", "b4", "tW", "b7", "s5"},
+    new List<string>() {"b3", "s2", "c2", "tR", "s9", "c2", "s2", "s1", "c5", "b2", "b7", "s6"},
+    new List<string>() {"s1", "tW", "s2", "tN", "c9", "fB", "s7", "s1", "tR", "s2", "s7", "tN"},
+    new List<string>() {"c3", "fB", "tW", "tE", "tW", "b5", "tR", "c8", "s6", "s3", "s6", "b4"},
+    new List<string>() {"b8", "s4", "b9", "s1", "tG", "tR", "s8", "s8", "s9", "c3", "b8", "c2"},
+    new List<string>() {"c2", "tE", "b7", "fR", "s4", "c9", "b8", "s3", "s7", "b5", "c1", "b7"},
+    new List<string>() {"s4", "b9", "b6", "tS", "c4", "fR", "tG", "fB", "c3", "c9", "s6", "tW"},
+    new List<string>() {"c6", "b7", "c6", "b3", "b4", "s6", "b9", "tN", "tS", "s1", "s9", "b2"},
+    new List<string>() {"tE", "tS", "c5", "c2", "c4", "b3", "fB", "tG", "s1", "s7", "tG", "c4"},
+    new List<string>() {"s4", "s6", "s7", "s1", "tW", "c7", "tN", "c8", "tR", "tW", "s7", "fB"},
+    new List<string>() {"tN", "b3", "s6", "b8", "s2", "c7", "tW", "b4", "s3", "tR", "b9", "tR"},
+    new List<string>() {"tE", "c3", "tN", "tN", "s8", "s5", "fR", "tG", "s6", "c9", "b3", "s9"},
+    new List<string>() {"s8", "tN", "s3", "c5", "b1", "tR", "s7", "s9", "b2", "s6", "tR", "s5"},
+    new List<string>() {"s9", "b9", "c3", "c2", "c5", "c1", "b6", "tG", "tW", "tR", "c7", "tN"},
+    new List<string>() {"tR", "c6", "tE", "s1", "b6", "b9", "s6", "b5", "b7", "b5", "tW", "fR"},
+    new List<string>() {"c6", "c1", "s8", "s9", "s1", "s3", "s7", "s3", "tS", "b4", "tG", "tG"},
+    new List<string>() {"tW", "s9", "b6", "b8", "s6", "b4", "b2", "s3", "b7", "fB", "s6", "s4"},
+    new List<string>() {"s8", "tR", "s8", "c3", "c8", "s3", "fB", "b2", "tR", "fB", "s1", "tS"},
+    new List<string>() {"s5", "b9", "b2", "c6", "c6", "c2", "s7", "fB", "b6", "c5", "fR", "s7"},
+    new List<string>() {"b5", "s8", "b6", "b5", "c7", "b2", "c1", "c8", "s9", "s1", "fB", "c5"},
+    new List<string>() {"s2", "fR", "s1", "c3", "c9", "s4", "s8", "b1", "c4", "b9", "s2", "c1"},
+    new List<string>() {"b4", "tG", "c3", "c6", "tG", "c4", "c3", "tW", "fR", "b5", "s2", "b3"},
+    new List<string>() {"c1", "b5", "s6", "c4", "b1", "b3", "tR", "tE", "b2", "c5", "tW", "tE"},
+    new List<string>() {"c7", "b6", "tR", "s5", "tN", "tN", "tE", "b5", "b8", "c1", "c6", "fB"},
+    new List<string>() {"b7", "s6", "c1", "c6", "c8", "b2", "s8", "s6", "fR", "b6", "c9", "c6"},
+    new List<string>() {"fR", "c4", "c8", "tW", "b9", "tS", "b3", "b1", "tN", "b5", "b4", "c6"},
+    new List<string>() {"s1", "b8", "b3", "c3", "c9", "tW", "s6", "s4", "s4", "s1", "tE", "fR"},
+    new List<string>() {"b9", "c1", "s2", "s8", "s5", "b9", "c4", "b3", "b2", "tW", "s8", "fR"},
+    new List<string>() {"tS", "tR", "c6", "b6", "tR", "s3", "b4", "s8", "c4", "s9", "c9", "b6"},
+    new List<string>() {"tR", "tG", "b5", "b1", "s1", "c1", "c7", "tW", "c2", "c9", "c6", "fB"},
+    new List<string>() {"c4", "s5", "b5", "c3", "b9", "b3", "tW", "s9", "tW", "fB", "s8", "s9"},
+    new List<string>() {"fB", "tW", "fB", "b8", "b5", "tG", "c4", "s1", "c3", "c5", "s2", "tG"},
+    new List<string>() {"c8", "b6", "b1", "b3", "b1", "c6", "b5", "s4", "tW", "tS", "tW", "fR"},
+    new List<string>() {"s5", "c9", "s2", "b2", "b2", "s7", "c7", "b9", "tW", "b2", "b4", "b7"},
+    new List<string>() {"b8", "s5", "c1", "b2", "s9", "c8", "s8", "tW", "c3", "s2", "tR", "tW"},
+    new List<string>() {"b6", "c5", "s4", "tR", "tS", "c5", "s4", "tE", "s9", "c9", "s1", "c3"},
+    new List<string>() {"b4", "tN", "b6", "tW", "c6", "s8", "b8", "fR", "b9", "c1", "c2", "s5"},
+    new List<string>() {"c1", "c7", "c8", "fR", "s4", "s9", "s5", "c3", "c2", "s9", "b9", "c8"},
+    new List<string>() {"s1", "s4", "b3", "tS", "fB", "tR", "tE", "c2", "s1", "tW", "b5", "c4"}
+};
+
+foreach (List<string> hand in hands)
+{
+    var freq = tiles.GroupBy(x => x).ToDictionary(group => group.Key, group => group.Count());
+    foreach (string tile in hand)
+    {
+        freq[tile] -= 1;
+    }
+
+    var result = Engine.FindNeed(hand).OrderBy(s => s[0]).ThenBy(s => s[1]).ToList();
+    foreach (string tile in result)
+    {
+        Console.Write(tile);
+        Console.Write(" ");
+    }
+    Console.WriteLine();
+}
+
+/*var freq = tiles
+    .Skip(12).Take(132)
+    .GroupBy(x => x)
+    .ToDictionary(group => group.Key, group => group.Count());
+
+var hand = tiles.Take(12).OrderBy(s => s[0]).ThenBy(s => s[1]).ToList();
+var result = Engine.FindNeed(hand, freq).OrderBy(s => s[0]).ThenBy(s => s[1]).ToList();
+foreach(string tile in hand)
+{
+    Console.Write(tile);
+    Console.Write(" ");
+}
+Console.WriteLine();
+
+foreach(string tile in result)
+{
+    Console.Write(tile);
+    Console.Write(" ");
+}*/
+
+#!csharp
+
+var list1 = new List<string>() {"aa", "bb", "cc", "cc", "dd", "ee"};
+var list2 = new List<string>() {"aa", "bb", "cc", "cc", "dd", "ee", "ee", "ff"};
+
+foreach (string x in list2.Except(list1))
+{
+    Console.Write(x);
+    Console.Write(" ");
+}
 
 #!csharp
 

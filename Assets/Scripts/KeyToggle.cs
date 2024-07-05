@@ -30,40 +30,30 @@ public class KeyToggle : MonoBehaviour
     void Update()
     {
         if (Input.GetKeyDown (KeyCode.R))
-        {
             R_Image.sprite = R_Down;
-        }
+        
         if (Input.GetKeyUp (KeyCode.R))
-        {
             R_Image.sprite = R_Up;
-        }
+        
 
         if (Input.GetKeyDown (KeyCode.S))
-        {
             S_Image.sprite = S_Down;
-        }
+        
         if (Input.GetKeyUp (KeyCode.S))
-        {
             S_Image.sprite = S_Up;
-        }
+        
 
         if (Input.GetKeyDown (KeyCode.O))
-        {
             O_Image.sprite = O_Down;
-        }
+        
         if (Input.GetKeyUp (KeyCode.O))
-        {
             O_Image.sprite = O_Up;
-        }
+        
 
         if (Input.GetKeyDown (KeyCode.T))
-        {
             T_Image.sprite = T_Down;
-        }
-        if (Input.GetKeyUp (KeyCode.T))
-        {
-            T_Image.sprite = T_Up;
-        }
         
+        if (Input.GetKeyUp (KeyCode.T))
+            T_Image.sprite = T_Up;
     }
 }

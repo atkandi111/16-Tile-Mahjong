@@ -339,7 +339,7 @@ public class SortTile : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.S) && busySorting != true)
+        if (Input.GetKeyDown(KeyCode.S) && busySorting != true) // change to Async
         {
             busySorting = true;
 

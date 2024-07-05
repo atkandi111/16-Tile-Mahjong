@@ -13,16 +13,25 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
     public Vector3 basePosition;
     public Quaternion baseRotation;
 
+    public delegate void OnMovementStopped();
+    public event OnMovementStopped OnStop;
+
     void Awake()
     {
         BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
         boxCollider.isTrigger = true;
 
         Rigidbody rigidbody = gameObject.AddComponent<Rigidbody>();
+        // rigidbody.mass = 1000;
         rigidbody.isKinematic = false;
         rigidbody.useGravity = false;
         rigidbody.drag = 15f;
         rigidbody.angularDrag = 15f;
+    }
+
+    void OnDisable()
+    {
+        OnStop?.Invoke();
     }
 
     public (Vector3, Quaternion) GetDestination()
@@ -54,6 +63,8 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
         lerpFactor = 0f;
         velocity = 0f;
         duration = smoothTime;
+
+        // tilesMoving += 1;
         enabled = true;
 
         gameObject.GetComponent<DragTile>().UpdateBasePosition(finalPos, finalRot);
@@ -70,6 +81,7 @@ public class TileManager : MonoBehaviour // change to MoveTile // add HoverTile,
         {
             transform.position = finalPos;
             transform.rotation = finalRot;
+
             enabled = false;
         }
     }
