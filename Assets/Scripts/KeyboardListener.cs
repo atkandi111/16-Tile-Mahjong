@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,7 +7,7 @@ using UnityEngine.UI;
 
 public class KeyboardListener : MonoBehaviour
 {
-    public static bool chaoRequested, pongRequested, kangRequested;
+    public static bool winRequested, chaoRequested, pongRequested, kangRequested;
     private int currentIndex;
     private string currentListener;
     Dictionary<char, KeyCode> keyMap = new Dictionary<char, KeyCode>()
@@ -22,6 +23,7 @@ public class KeyboardListener : MonoBehaviour
     
     void OnEnable()
     {
+        winRequested = false;
         chaoRequested = false;
         pongRequested = false;
         kangRequested = false;
@@ -36,6 +38,9 @@ public class KeyboardListener : MonoBehaviour
         {
             if (currentListener == null)
             {
+                if (Input.GetKeyDown (KeyCode.W))
+                    currentListener = "WIN";
+
                 if (Input.GetKeyDown (KeyCode.C))
                     currentListener = "CHAO";
 
@@ -62,40 +67,81 @@ public class KeyboardListener : MonoBehaviour
                         {
                             currentIndex = 0;
                             currentListener = null;
-                            break;
+                            return;
                         }
                     }
                 }
+
+                if (currentIndex == currentListener.Length)
+                {
+                    winRequested = false;
+                    chaoRequested = false;
+                    pongRequested = false;
+                    kangRequested = false;
+
+                    /* accept latest request */
+                    if (currentListener == "WIN")
+                    {
+                        MeldText.Instance.PreWin(0);
+                        winRequested = true;
+
+                        if (GameManager.currentPlayer == GameManager.Players[0])
+                        {
+                            if (GameManager.Players[0].engine.WillWin())
+                            {
+                                AudioManager.Instance.playWin();
+                                MeldText.Instance.OnWin(0);
+                                Debug.Log("todas");
+                            }
+                        }
+                    }
+
+                    if (currentListener == "CHAO" && GameManager.currentPlayer != GameManager.Players[0])
+                    {
+                        MeldText.Instance.PreChao(0);
+                        chaoRequested = true;
+                    }
+
+                    if (currentListener == "PONG" && GameManager.currentPlayer != GameManager.Players[0])
+                    {
+                        MeldText.Instance.PrePong(0);
+                        pongRequested = true;
+                    }
+                    
+                    if (currentListener == "KANG")
+                    {   
+                        MeldText.Instance.PreKang(0);
+                        kangRequested = true;
+
+                        if (GameManager.currentPlayer == GameManager.Players[0])
+                        {
+                            List<GameObject> kangBlock = GameManager.currentPlayer.Hand
+                                .Where(go => GameManager.currentPlayer.Open.Count(xo => xo.name == go.name) == 3)
+                                .ToList();
+                            
+                            List<GameObject> scrtBlock = GameManager.currentPlayer.Hand
+                                .GroupBy(go => go.name)
+                                .Where(group => group.Count() == 4)
+                                .SelectMany(group => group)
+                                .ToList();
+
+                            if (kangBlock.Count() + scrtBlock.Count() > 0)
+                            {
+                                AudioManager.Instance.playKang();
+                                MeldText.Instance.OnKang(0);
+
+                                if (kangBlock.Count() > 0)
+                                    GameManager.currentPlayer.OpenTile(kangBlock);
+                                if (scrtBlock.Count() > 0)
+                                    GameManager.Players[0].ScrtTile(scrtBlock);
+                            }
+                        }
+                    }
+                    
+                    currentIndex = 0;
+                    currentListener = null;
+                }   
             }
-
-            if (currentIndex == 4)
-            {
-                chaoRequested = false;
-                pongRequested = false;
-                kangRequested = false;
-
-                /* accept latest request */
-                if (currentListener == "CHAO")
-                {
-                    MeldText.Instance.PreChao(0);
-                    chaoRequested = true;
-                }
-
-                if (currentListener == "PONG")
-                {
-                    MeldText.Instance.PrePong(0);
-                    pongRequested = true;
-                }
-                
-                if (currentListener == "KANG")
-                {   
-                    MeldText.Instance.PreKang(0);
-                    kangRequested = true;
-                }
-                
-                currentIndex = 0;
-                currentListener = null;
-            }   
         }
     }
 }

@@ -2,14 +2,9 @@ using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-using JetBrains.Annotations; //
 using UnityEngine;
-using UnityEditor;
 using Random = System.Random;
-using System.Runtime.CompilerServices; //
-using System.Numerics;
 using Quaternion = UnityEngine.Quaternion;
-using Vector2 = UnityEngine.Vector2; //
 using Vector3 = UnityEngine.Vector3;
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
@@ -45,11 +40,11 @@ public class GameManager : MonoBehaviour // convert to singleton
             int tileID = (i % 4) + 1;
             if (tileName.Contains('f'))
             {
-                temp = Instantiate(Resources.Load($"{tileName}-{tileID}")) as GameObject;
+                temp = Instantiate(Resources.Load($"Tiles/{tileName}-{tileID}")) as GameObject;
             }
             else 
             {
-                temp = Instantiate(Resources.Load(tileName)) as GameObject;
+                temp = Instantiate(Resources.Load($"Tiles/{tileName}")) as GameObject;
             }
 
             temp.name = tileName;
@@ -121,7 +116,7 @@ public class GameManager : MonoBehaviour // convert to singleton
             TileSet[j] = temp;
         }
 
-        TileSet = TestRearrange(TileSet, "tN");
+        // TileSet = TestRearrange(TileSet, new List<string>() {"tN", "tW", "tE", "tG"});
 
         // declare diceroll here
 
@@ -262,14 +257,51 @@ public class GameManager : MonoBehaviour // convert to singleton
 
     public static IEnumerator PreTossBuffer()
     {
-        // player grabs tile
-        // will current player flower?
-        // will current player kang?
-        // add keyboardlistener request WAIT, to wait for 5 more seconds
-        // player chooses toss
-        yield return null;
+        GameObject nextTile = TileWalls[0];
+        currentPlayer.GrabTile(nextTile);
+
+        int currentIndex = Array.IndexOf(Players, currentPlayer);
+        float elapsedTime = 0f, decisionTime = 3f;
+
+        while (elapsedTime < decisionTime)
+        {
+            if (currentPlayer.WillWin(nextTile))
+            {
+                AudioManager.Instance.playWin();
+                MeldText.Instance.OnWin(currentIndex);
+
+                Debug.Log("BUNOT");
+                yield break;
+            }
+
+            if (currentPlayer.WillKang(nextTile)) // && not round's first move
+            {
+                AudioManager.Instance.playKang();
+                MeldText.Instance.OnKang(currentIndex);
+
+                List<GameObject> kangBlock = currentPlayer.Hand.Where(go => go.name == nextTile.name).ToList();
+                kangBlock.Add(nextTile);
+                TileToss.Remove(nextTile);
+
+                currentPlayer.ScrtTile(kangBlock);
+                // currentPlayer.ChooseDiscard();
+                elapsedTime = 0f;
+                yield break;
+            }
+
+            PlayerLight.Instance.enabled = true;  
+
+            if (elapsedTime - decisionTime >= 3f && elapsedTime - decisionTime <= 3.25f)
+                PlayerLight.Instance.enabled = false;
+
+            if (elapsedTime - decisionTime >= 2f && elapsedTime - decisionTime <= 2.25f)
+                PlayerLight.Instance.enabled = false;
+            
+            if (elapsedTime - decisionTime >= 1f && elapsedTime - decisionTime <= 1.25f)
+                PlayerLight.Instance.enabled = false;
+        }
     }
-    public static IEnumerator PostTossBuffer(GameObject tile)
+    public static IEnumerator PostTossBuffer(GameObject tile) // postturn
     {
         float elapsedTime = 0f, decisionTime = 3f;
 
@@ -294,8 +326,11 @@ public class GameManager : MonoBehaviour // convert to singleton
         {
             if (Players[i % 4].WillWin(tile))
             {
+                AudioManager.Instance.playWin();
                 PlayerLight.Instance.UpdateLight(i % 4);
+                MeldText.Instance.OnWin(i % 4);
                 currentPlayer = Players[i % 4];
+                Debug.Log("WINNER");
                 yield break;
             }
         }
@@ -366,7 +401,6 @@ public class GameManager : MonoBehaviour // convert to singleton
         currentPlayer = Players[currentIndex];
         currentPlayer.GrabTile(TileWalls[0]);
     }
-
     void CompressWalls(int diceRoll, int mano)
     {
         int wallIndex = (mano + (diceRoll % 4)) * 20;
@@ -410,24 +444,44 @@ public class GameManager : MonoBehaviour // convert to singleton
         }*/
     }
 
-    GameObject[] TestRearrange(GameObject[] tiles, string targetName)
+    GameObject[] TestRearrange(GameObject[] tiles, List<string> targetName)
     {
         List<GameObject> tileList = new List<GameObject>(tiles);
         List<GameObject> tileMover = new List<GameObject>();
 
-        for (int i = tileList.Count - 1; i >= 0; i--)
+        foreach (string name in targetName)
         {
-            if (tileList[i].name == targetName)
+            for (int i = tileList.Count - 1; i >= 0; i--)
             {
-                tileMover.Insert(0, tileList[i]);
-                tileList.RemoveAt(i);
+                if (tileList[i].name == name)
+                {
+                    tileMover.Insert(0, tileList[i]);
+                    tileList.RemoveAt(i);
+                }
             }
         }
 
         tileList.Insert(82, tileMover[0]);
         tileList.Insert(82, tileMover[1]);
         tileList.Insert(90, tileMover[2]);
-        tileList.Insert(109, tileMover[3]);
+        tileList.Insert(90, tileMover[3]);
+
+        tileList.Insert(98, tileMover[4]);
+        tileList.Insert(98, tileMover[5]);
+        tileList.Insert(106, tileMover[6]);
+        tileList.Insert(106, tileMover[7]);
+
+        tileList.Insert(114, tileMover[8]);
+        tileList.Insert(114, tileMover[9]);
+        tileList.Insert(122, tileMover[10]);
+        tileList.Insert(122, tileMover[11]);
+
+        tileList.Insert(130, tileMover[12]);
+        tileList.Insert(130, tileMover[13]);
+        tileList.Insert(138, tileMover[14]);
+        tileList.Insert(138, tileMover[15]);
+        
+       
         return tileList.ToArray();
     }
 
@@ -497,3 +551,15 @@ because stepVector is positive, so that it's easier to left-align
 
 
 // convert currentplayer to int
+
+
+// CONVERT TO EVENTS:
+/*
+OnKang(), OnPong(), OnChao()
+*/
+
+// bug if chao an earlier pong.
+// e.g. existing openchao == 5 6 7.
+// if pong 7, bot will think it's kang
+
+// doesn't kang an existing pong

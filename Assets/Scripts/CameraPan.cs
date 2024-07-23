@@ -5,12 +5,11 @@ using UnityEngine;
 
 public class CameraPan : MonoBehaviour // static
 {
-    const float minRadians = 0f;
-    const float maxRadians = Mathf.PI / 2;
+    const float minRadians = 0f, maxRadians = Mathf.PI / 2;
     const float deltaRadians = 0.02f;
+
+    public static float percentArc, groundNegative;
     private float radius, radians;
-    public static float percentArc;
-    public static float groundNegative;
     private float x, y;
 
     void Start()

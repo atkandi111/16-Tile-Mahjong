@@ -12,7 +12,7 @@ public class AudioManager : MonoBehaviour
     }
 
     private AudioSource audioSource;
-    private AudioClip audioKang, audioPong, audioChao;
+    private AudioClip audioKang, audioPong, audioChao, audioWin;
     private AudioClip audioMovement, audioCollision;
     public void Start()
     {
@@ -22,6 +22,7 @@ public class AudioManager : MonoBehaviour
         audioKang = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/kang-2.mp3");
         audioPong = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/pong-2.mp3");
         audioChao = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/chao-2.mp3");
+        audioWin = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/Thunder.mp3");
 
         audioMovement = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/Move 5.mp3");
         audioCollision = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Objects/Sounds/Move 2.mp3");
@@ -41,6 +42,12 @@ public class AudioManager : MonoBehaviour
     public void playChao()
     {
         audioSource.clip = audioChao;
+        audioSource.Play();
+    }
+
+    public void playWin()
+    {
+        audioSource.clip = audioWin;
         audioSource.Play();
     }
 

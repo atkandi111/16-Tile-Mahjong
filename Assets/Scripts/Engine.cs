@@ -6,14 +6,6 @@ using UnityEngine;
 public class Engine
 {
     private Player player;
-    /*private static string[] tileNames = new string[]
-    {
-        "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9",
-        "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9",
-        "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9",
-        "tN", "tS", "tW", "tE", "tG", "tR", "tP", "fR", "fB"
-    };
-    private Dictionary<string, int> reference = tileNames.ToDictionary(name => name, _ => 4);*/
     public Engine(Player player)
     {
         this.player = player;
@@ -36,39 +28,14 @@ public class Engine
 
     public string ChooseDiscard()
     {
-        /*this.knowledgeBase = new Dictionary<string, int>(this.reference);
-        var tossed = GameManager.TileToss
-            .Select(tile => tile.name)
-            .GroupBy(name => name)
-            .ToDictionary(group => group.Key, group => group.Count());
-
-        var opened = 
-
-
-        return this.knowledgeBase.ToDictionary(
-            tile => tile.Key,
-            tile => tile.Value - dict2.GetValue(tile.Key)
-        );*/
         this.prePong.Clear();
         this.preChow.Clear();
-
-        // this.knowledgeBase()
 
         return AnalyzeHand(player.Hand.Select(tile => tile.name).ToList())[0];
     }
 
     public List<string> AnalyzeHand(List<string> candidates)
     {
-        /*foreach (string tile in candidates)
-        {
-            this.knowledgeBase[tile] -= 1;
-            if (knowledgeBase[tile] < 0)
-            {
-                throw new ArgumentException("negative KB");
-            }
-        }*/
-
-        // rename Frequency to Count
         candidates = DecomposeMeld(candidates);
         candidates = DecomposeNeed(candidates);
         candidates = DecomposeNear(candidates);
@@ -85,7 +52,7 @@ public class Engine
             .GroupBy(tile => tile)
             .ToDictionary(group => group.Key, _ => 0f);
 
-        List<string[]> melds = new List<string[]>();
+        /*List<string[]> melds = new List<string[]>();
         foreach (string tile in handFrequency.Keys)
         {
             if (handFrequency[tile] > 2) 
@@ -111,8 +78,9 @@ public class Engine
                     }
                 }
             }
-        }
+        }*/
         
+        List<string[]> melds = GroupMelds(handFrequency);
         for (int meldCount = candidates.Count / 3; meldCount >= 0; meldCount--)
         {
             // DCMP = decompositon
@@ -183,7 +151,7 @@ public class Engine
             .GroupBy(tile => tile)
             .ToDictionary(group => group.Key, _ => 0f);
 
-        List<string[]> melds = new List<string[]>();
+        /*List<string[]> melds = new List<string[]>();
         foreach (string tile in handFrequency.Keys)
         {
             if (handFrequency[tile] > 2) 
@@ -211,8 +179,9 @@ public class Engine
                     }
                 }
             }
-        }
+        }*/
         
+        List<string[]> melds = GroupMelds(handFrequency);
         for (int meldCount = candidates.Count / 3; meldCount >= 0; meldCount--)
         {
             // DCMP = decompositon
@@ -396,8 +365,96 @@ public class Engine
             .Select(tile => tile.Key)
             .ToList();
     }
+    public bool WillWin()
+    {
+        Debug.Log("tried to win");
+        List<string> tempHand = player.Hand.Select(tile => tile.name).ToList();
+
+        Dictionary<string, int> handFrequency = tempHand
+            .GroupBy(name => name)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Dictionary<string, float> meldFrequency = tempHand
+            .GroupBy(name => name)
+            .ToDictionary(group => group.Key, _ => 0f);
+        
+        List<string> pairs = GroupPairs(handFrequency);
+        List<string[]> melds = GroupMelds(handFrequency);
+
+        int meldCount = player.Hand.Count / 3;
+        if (meldCount == 0)
+        {
+            return player.Hand[0].name == player.Hand[1].name;
+        }
+        var combinations = Grouper.Combinations(melds, meldCount);
+
+        foreach (List<string[]> meldDCMP in combinations)
+        {
+            Dictionary<string, int> dcmpFrequency = meldDCMP
+                .SelectMany(array => array)
+                .GroupBy(tile => tile)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            bool invalidDCMP = dcmpFrequency.Any(tile => tile.Value > handFrequency[tile.Key]);
+            if (invalidDCMP)
+                continue;
+
+            foreach (string eye in pairs)
+            {
+                if (handFrequency[eye] - dcmpFrequency.GetValueOrDefault(eye) == 2)
+                {
+                    Debug.Log("TODAS");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     public bool WillWin(string tile)
     {
+        Debug.Log("tried to win");
+        List<string> tempHand = player.Hand.Select(tile => tile.name).ToList();
+        tempHand.Add(tile);
+
+        Dictionary<string, int> handFrequency = tempHand
+            .GroupBy(name => name)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        Dictionary<string, float> meldFrequency = tempHand
+            .GroupBy(name => name)
+            .ToDictionary(group => group.Key, _ => 0f);
+        
+        List<string> pairs = GroupPairs(handFrequency);
+        List<string[]> melds = GroupMelds(handFrequency);
+
+        int meldCount = player.Hand.Count / 3;
+        if (meldCount == 0)
+        {
+            return player.Hand[0].name == tile;
+        }
+
+        var combinations = Grouper.Combinations(melds, meldCount);
+
+        foreach (List<string[]> meldDCMP in combinations)
+        {
+            Dictionary<string, int> dcmpFrequency = meldDCMP
+                .SelectMany(array => array)
+                .GroupBy(tile => tile)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            bool invalidDCMP = dcmpFrequency.Any(tile => tile.Value > handFrequency[tile.Key]);
+            if (invalidDCMP)
+                continue;
+
+            foreach (string eye in pairs)
+            {
+                if (handFrequency[eye] - dcmpFrequency.GetValueOrDefault(eye) == 2)
+                {
+                    Debug.Log("TODAS");
+                    return true;
+                }
+            }
+        }
         return false;
     }
     public bool WillKang(string tile)

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class MeldText : MonoBehaviour
 {
-    private Sprite chaoText, pongText, kangText;
+    private Sprite winText, chaoText, pongText, kangText;
     private Image[] imageArray = new Image[4];
     private static MeldText instance;
     public static  MeldText Instance
@@ -26,9 +26,20 @@ public class MeldText : MonoBehaviour
             Hide(i);
         }
 
+        winText = Resources.Load<Sprite>("MeldText/Todas");
         chaoText = Resources.Load<Sprite>("MeldText/Chao");
         pongText = Resources.Load<Sprite>("MeldText/Pong");
         kangText = Resources.Load<Sprite>("MeldText/Kang");
+    }
+
+    public void OnWin(int playerIndex)
+    {
+        imageArray[0].enabled = false;
+
+        Image image = imageArray[playerIndex];
+        image.color = new Color(image.color.r, image.color.g, image.color.b, 1f);
+        image.sprite = winText;
+        image.enabled = true;
     }
 
     public void OnChao(int playerIndex)
@@ -66,6 +77,13 @@ public class MeldText : MonoBehaviour
     }
 
     /* for Player[0] only */
+    public void PreWin(int playerIndex)
+    {
+        Image image = imageArray[playerIndex];
+        image.color = new Color(image.color.r, image.color.g, image.color.b, 0.25f);
+        image.sprite = winText;
+        image.enabled = true;
+    }
     public void PreChao(int playerIndex)
     {
         Image image = imageArray[playerIndex];

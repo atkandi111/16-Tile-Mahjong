@@ -24,7 +24,7 @@ public abstract class Player : MonoBehaviour
     public abstract Vector3 viewpoint { get; }
     public abstract float groundNegative { get; }
 
-    public bool WillWin(GameObject tile) { return false; }
+    public abstract bool WillWin(GameObject tile);
     public abstract bool WillChao(GameObject tile);
     public abstract bool WillPong(GameObject tile);
     public abstract bool WillKang(GameObject tile);
@@ -87,6 +87,19 @@ public abstract class Player : MonoBehaviour
             row.MoveNext();
             Vector3 position = this.quadrant * row.Current;
             Quaternion rotation = this.quadrant * Quaternion.Euler(Positioner.FaceUp, 0, 180);
+            
+            tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
+        }
+    }
+
+    public void DistributeScrt()
+    {
+        IEnumerator<Vector3> row = Positioner.DistributeRow(Open.Count, Perimeter.OpenArea, upright: false);
+        foreach (GameObject tile in Open)
+        {
+            row.MoveNext();
+            Vector3 position = this.quadrant * row.Current;
+            Quaternion rotation = this.quadrant * Quaternion.Euler(Positioner.FaceUp, 0, 180); // FaceDown
             
             tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.05f);
         }
@@ -161,6 +174,27 @@ public abstract class Player : MonoBehaviour
             }
         }));
     }
+
+    public virtual void ScrtTile(GameObject tile) => ScrtTile(new List<GameObject> { tile });
+    public virtual void ScrtTile(List<GameObject> tiles)
+    {
+        Open.AddRange(tiles);
+        Hand.RemoveAll(tiles.Contains);
+
+        foreach (GameObject tile in tiles)
+        {
+            tile.GetComponent<BoxCollider>().isTrigger = true;
+        }
+
+        DistributeScrt();
+        DistributeHand();
+        StartCoroutine(DelayAction(() => 
+        {
+            GrabTile(GameManager.TileWalls.Last());
+            GameManager.StackFlower();
+        }));
+    }
+
     public virtual void TossTile(GameObject tile)
     {
         Hand.Remove(tile);
@@ -177,16 +211,10 @@ public abstract class Player : MonoBehaviour
         tile.GetComponent<TileManager>().SetDestination(position, rotation, 0.1f);
         
         DistributeHand();
-        // StartCoroutine(DelayAction(() => {
         tile.GetComponent<BoxCollider>().isTrigger = false;
         tile.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationX;
-        // tile.AddComponent<DragToss>();
-
-        // tile.GetComponent<Rigidbody>().collisionDetectionMode = CollisionDetectionMode.Continuous;
 
         StartCoroutine(GameManager.PostTossBuffer(tile));
-            //StartCoroutine(TossBuffer());
-        // }));
     }   
 }
 
@@ -232,6 +260,16 @@ public class Human : Player
 
         tile.GetComponent<DragTile>().enabled = false;
         Camera.main.GetComponent<KeyboardListener>().enabled = false;
+    }
+
+    public override bool WillWin(GameObject tile)
+    {
+        if (KeyboardListener.winRequested == false)
+            return false;
+
+        KeyboardListener.winRequested = false;
+
+        return this.engine.WillWin(tile.name);
     }
 
     public override bool WillChao(GameObject tile)
@@ -306,23 +344,39 @@ public class Bot : Player
         {
             return;
         }*/
-        StartCoroutine(DelayAction(() => 
+        StartCoroutine(DelayAction(() =>  // replicate in Human
         {
             int flowerCount = tiles.Count(tile => tile.name.StartsWith("f"));
             if (flowerCount > 0 && GameManager.currentPlayer == this)
             {
                 OpenTile(tiles.Where(tile => tile.name.StartsWith("f")).ToList());
-                GameManager.StackFlower();
+                // GameManager.StackFlower();
             }
+
+            // if kang
+
             /*if (tiles[0].name.StartsWith("f"))
             {
                 OpenTile(tiles[0]);
             }*/
             else if (tiles.Count == 1 && GameManager.currentPlayer == this)
             {
-                ChooseDiscard();
+                if (Hand.Count(tile => tile.name == tiles[0].name) == 4)
+                {
+                    ScrtTile(Hand.Where(tile => tile.name == tiles[0].name).ToList());
+                }
+                else
+                {
+                    ChooseDiscard();
+                }
             }
         }));
+    }
+
+
+    public override bool WillWin(GameObject tile)
+    {
+        return this.engine.WillWin(tile.name);
     }
 
     public override bool WillChao(GameObject tile)
