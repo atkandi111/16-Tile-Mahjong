@@ -24,7 +24,9 @@ These are the possible sets:
 
 ### Demo
 in img/GameDemo.mp4:
-https://github.com/atkandi111/16-Tile-Mahjong/raw/main/img/GameDemo.mp4
+<video width="320" height="240" controls loop="" muted="" autoplay="">
+  <source src="https://github.com/atkandi111/16-Tile-Mahjong/raw/main/img/GameDemo.mp4">
+</video>
 ![](img/GameDemo.mp4)
 
 ## Planned Features
