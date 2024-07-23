@@ -23,6 +23,8 @@ These are the possible sets:
 > ![](img/chao.png)
 
 ### Demo
+in img/GameDemo.mp4:
+https://github.com/atkandi111/16-Tile-Mahjong/raw/main/img/GameDemo.mp4
 ![](img/GameDemo.mp4)
 
 ## Planned Features
