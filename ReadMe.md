@@ -24,7 +24,7 @@ These are the possible sets:
 
 ### Demo
 in img/GameDemo.mp4:
-[![](https://youtu.be/nyIvG7ZsaV0)]
+[![](https://markdown-videos-api.jorgenkh.no/youtube/{nyIvG7ZsaV0})](https://youtu.be/{nyIvG7ZsaV0})
 
 ## Planned Features
 + Panel after winning
