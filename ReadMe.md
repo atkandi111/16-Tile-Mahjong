@@ -6,6 +6,9 @@ This is a personal project. I grew up playing Mahjong with my family and have co
 
 The project includes an engine for choosing bot discards, a sorting algorithm for the player's hand, and a brute-force algorithm for searching where to put a discard in the throw area.
 
+### Demo
+https://www.youtube.com/embed/nyIvG7ZsaV0
+
 ## Game Mechanics
 Filipino Mahjong is probably the simplest version of Mahjong. Each player receives 16 tiles and takes turns drawing and discarding tiles. The dealer (mano) draws first then discards a tile. You can type "pong", "kang", or "chao" to take this discard if you need it. If no one wants to take the discarded tile, the player to his right draws next.
 
@@ -21,10 +24,6 @@ These are the possible sets:
 > ![](img/kang.png)
 3. **Chao**. Three consecutive tiles of the same suit
 > ![](img/chao.png)
-
-### Demo
-in img/GameDemo.mp4:
-[![](https://markdown-videos-api.jorgenkh.no/youtube/{nyIvG7ZsaV0})](https://youtu.be/{nyIvG7ZsaV0})
 
 ## Planned Features
 + Panel after winning
